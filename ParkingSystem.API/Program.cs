@@ -1,14 +1,17 @@
 
 using ParkingSystem.Infrastructure;
-using ParkingSystem.Infrastructure.Persistence;
-
 namespace ParkingSystem.API
 {
     public class Program
     {
-        public static async Task Main(string[] args)
+        public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            builder.Configuration.AddJsonFile(
+                "appsettings.Local.json",
+                optional: true,
+                reloadOnChange: true);
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
@@ -26,12 +29,6 @@ namespace ParkingSystem.API
             });
 
             var app = builder.Build();
-
-            using (var scope = app.Services.CreateScope())
-            {
-                var initializer = scope.ServiceProvider.GetRequiredService<MongoDbInitializer>();
-                await initializer.InitializeAsync();
-            }
 
             app.UseSwagger();
             app.UseSwaggerUI();
