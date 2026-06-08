@@ -45,6 +45,8 @@ ScaffoldingReadMe.txt
 CodeCoverage/
 .vs/
 *.csproj.user
+appsettings.Local.json
+.verify-build/
 
 # MSBuild Binary and Structured Log
 *.binlog
