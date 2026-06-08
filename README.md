@@ -77,12 +77,23 @@ Main API modules:
 
 ## MongoDB Configuration
 
-Add your MongoDB Atlas connection string in `ParkingSystem.API/appsettings.json` or user-secrets. Do not commit a real database password.
+Keep the sample MongoDB Atlas connection string in `ParkingSystem.API/appsettings.json`. Do not commit a real database password.
 
 ```json
 {
   "MongoDbSettings": {
     "ConnectionString": "mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority",
+    "DatabaseName": "ParkingManagerDb"
+  }
+}
+```
+
+For local development, create `ParkingSystem.API/appsettings.Local.json`. This file is ignored by Git and can contain your real connection string:
+
+```json
+{
+  "MongoDbSettings": {
+    "ConnectionString": "mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority&appName=<app-name>",
     "DatabaseName": "ParkingManagerDb"
   }
 }

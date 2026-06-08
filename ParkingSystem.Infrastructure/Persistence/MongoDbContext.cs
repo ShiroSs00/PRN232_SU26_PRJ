@@ -12,7 +12,11 @@ public class MongoDbContext
     public MongoDbContext(IOptions<MongoDbSettings> options)
     {
         var settings = options.Value;
-        var client = new MongoClient(settings.ConnectionString);
+        var mongoClientSettings = MongoClientSettings.FromConnectionString(settings.ConnectionString);
+        mongoClientSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(10);
+        mongoClientSettings.ConnectTimeout = TimeSpan.FromSeconds(10);
+
+        var client = new MongoClient(mongoClientSettings);
         _database = client.GetDatabase(settings.DatabaseName);
         DatabaseName = settings.DatabaseName;
     }
