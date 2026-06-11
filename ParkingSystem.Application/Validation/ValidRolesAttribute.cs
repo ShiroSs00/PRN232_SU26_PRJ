@@ -1,18 +1,10 @@
 using System.ComponentModel.DataAnnotations;
-using ParkingSystem.Domain.Constants;
+using ParkingSystem.Domain.Enums;
 
 namespace ParkingSystem.Application.Validation;
 
 public class ValidRolesAttribute : ValidationAttribute
 {
-    private static readonly string[] AllowedRoles = new[]
-    {
-        UserRoles.Admin,
-        UserRoles.FacilityManager,
-        UserRoles.ParkingStaff,
-        UserRoles.Driver
-    };
-
     public bool AllowEmpty { get; set; } = false;
 
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
@@ -34,9 +26,10 @@ public class ValidRolesAttribute : ValidationAttribute
 
         foreach (var role in roles)
         {
-            if (!AllowedRoles.Contains(role))
+            if (!Enum.TryParse<UserRole>(role, out _))
             {
-                return new ValidationResult($"Role '{role}' is invalid. Allowed roles are: {string.Join(", ", AllowedRoles)}.");
+                var allowedRoles = string.Join(", ", Enum.GetNames<UserRole>());
+                return new ValidationResult($"Role '{role}' is invalid. Allowed roles are: {allowedRoles}.");
             }
         }
 
