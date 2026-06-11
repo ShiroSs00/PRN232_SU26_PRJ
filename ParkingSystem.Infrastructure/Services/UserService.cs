@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using ParkingSystem.Application.DTOs;
 using ParkingSystem.Application.Services;
 using ParkingSystem.Domain.Constants;
+using ParkingSystem.Domain.Enums;
 using ParkingSystem.Domain.Entities;
 using ParkingSystem.Infrastructure.Persistence;
 
@@ -88,14 +89,13 @@ public class UserService : IUserService
         }
 
         // Validate roles
-        var allowedRoles = new[] { UserRoles.Admin, UserRoles.FacilityManager, UserRoles.ParkingStaff, UserRoles.Driver };
         if (createUserDto.Roles == null || createUserDto.Roles.Count == 0)
         {
             throw new Exception("At least one role is required.");
         }
         foreach (var r in createUserDto.Roles)
         {
-            if (!allowedRoles.Contains(r))
+            if (!Enum.TryParse<UserRole>(r, out _))
             {
                 throw new Exception($"Role '{r}' is invalid.");
             }
@@ -148,10 +148,9 @@ public class UserService : IUserService
 
         if (updateUserDto.Roles != null && updateUserDto.Roles.Count > 0)
         {
-            var allowedRoles = new[] { UserRoles.Admin, UserRoles.FacilityManager, UserRoles.ParkingStaff, UserRoles.Driver };
             foreach (var r in updateUserDto.Roles)
             {
-                if (!allowedRoles.Contains(r))
+                if (!Enum.TryParse<UserRole>(r, out _))
                 {
                     throw new Exception($"Role '{r}' is invalid.");
                 }
