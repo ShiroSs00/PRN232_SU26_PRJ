@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ParkingSystem.Application.Validation;
 
 namespace ParkingSystem.Application.DTOs;
 
@@ -19,5 +20,6 @@ public class CreateUserDto
     public string? PhoneNumber { get; set; }
 
     [Required(ErrorMessage = "At least one role is required.")]
+    [ValidRoles(AllowEmpty = false)]
     public List<string> Roles { get; set; } = [];
 }

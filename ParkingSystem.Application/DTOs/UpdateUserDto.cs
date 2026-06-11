@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ParkingSystem.Application.Validation;
 
 namespace ParkingSystem.Application.DTOs;
 
@@ -16,6 +17,7 @@ public class UpdateUserDto
 
     public string? PhoneNumber { get; set; }
 
+    [ValidRoles(AllowEmpty = true)]
     public List<string> Roles { get; set; } = [];
 
     public bool? IsActive { get; set; }
