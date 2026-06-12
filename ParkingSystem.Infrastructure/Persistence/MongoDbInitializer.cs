@@ -2,16 +2,19 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using ParkingSystem.Domain.Constants;
 using ParkingSystem.Domain.Entities;
+using ParkingSystem.Application.Services;
 
 namespace ParkingSystem.Infrastructure.Persistence;
 
 public class MongoDbInitializer
 {
     private readonly MongoDbContext _context;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public MongoDbInitializer(MongoDbContext context)
+    public MongoDbInitializer(MongoDbContext context, IPasswordHasher passwordHasher)
     {
         _context = context;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task InitializeAsync()
@@ -91,6 +94,55 @@ public class MongoDbInitializer
         await SeedParkingSlotsAsync(building.Id, floorB2.Id, carZone.Id, car.Id, "B2-C", 5);
         await SeedFeePolicyAsync(motorcycle.Id, "Motorcycle Hourly", 5000m, 3000m);
         await SeedFeePolicyAsync(car.Id, "Car Hourly", 20000m, 10000m);
+        await SeedUsersAsync();
+    }
+
+    private async Task SeedUsersAsync()
+    {
+        if (await _context.Users.CountDocumentsAsync(Builders<User>.Filter.Empty) > 0)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var users = new[]
+        {
+            new User
+            {
+                Id = ObjectId.GenerateNewId().ToString(),
+                FullName = "System Administrator",
+                Email = "admin@parking.com",
+                PasswordHash = _passwordHasher.HashPassword("Admin@123"),
+                PhoneNumber = "0123456789",
+                Roles = new List<string> { UserRoles.Admin },
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = ObjectId.GenerateNewId().ToString(),
+                FullName = "Facility Manager",
+                Email = "manager@parking.com",
+                PasswordHash = _passwordHasher.HashPassword("Manager@123"),
+                PhoneNumber = "0123456788",
+                Roles = new List<string> { UserRoles.FacilityManager },
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = ObjectId.GenerateNewId().ToString(),
+                FullName = "Parking Staff",
+                Email = "staff@parking.com",
+                PasswordHash = _passwordHasher.HashPassword("Staff@123"),
+                PhoneNumber = "0123456787",
+                Roles = new List<string> { UserRoles.ParkingStaff },
+                IsActive = true,
+                CreatedAt = now
+            }
+        };
+
+        await _context.Users.InsertManyAsync(users);
     }
 
     private async Task SeedRolesAsync()
