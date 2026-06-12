@@ -82,14 +82,20 @@ Tất cả các endpoint API phải trả về dữ liệu được bọc trong 
 * Bạn **không cần** viết code `if (!ModelState.IsValid)` thủ công trong Controller.
 * **`ValidationFilter`** đã được cấu hình toàn cục. Nếu dữ liệu gửi lên sai định dạng, Filter sẽ tự động đánh chặn và trả về lỗi `HTTP 400 Bad Request` theo format `ApiResponse` chuẩn.
 
-### 4.3. Xử lý Lỗi Hệ Thống (Exception Handling)
-* Trong các Service ở tầng `Infrastructure` hoặc `Application`, nếu gặp lỗi logic (ví dụ: Email đã tồn tại, Không tìm thấy xe,...), hãy **quăng ngoại lệ trực tiếp**:
-  ```csharp
-  throw new Exception("Email này đã được đăng ký.");
-  ```
-* **`ExceptionMiddleware`** sẽ tự động bắt lấy ngoại lệ này ở tầng ngoài cùng, ghi log lại, và trả về HTTP 500 kèm response JSON dạng `ApiResponse.Fail` bảo mật.
+### 4.3. Xử lý Lỗi Hệ Thống & Phân Quyền (Exception Handling)
+* Trong các Service, nếu gặp lỗi logic hoặc không có quyền truy cập, hãy **quăng ngoại lệ trực tiếp**:
+  - Lỗi logic thông thường: `throw new Exception("Email này đã được đăng ký.");` -> Middleware trả về HTTP 500.
+  - Lỗi phân quyền/sở hữu tài nguyên: `throw new UnauthorizedAccessException("Bạn không có quyền sửa tài nguyên này.");` -> Middleware tự động trả về **HTTP 403 Forbidden** với response chuẩn.
+* **`ExceptionMiddleware`** sẽ tự động bắt các lỗi này để trả về HTTP status code tương ứng và bọc trong JSON dạng `ApiResponse.Fail` bảo mật.
 
-### 4.4. Cơ chế Xóa Mềm (Soft Delete)
+### 4.4. Lấy Thông Tin Người Dùng Hiện Tại (User Context)
+* **Tuyệt đối không** gọi `User.FindFirst(...)` hoặc `User.IsInRole(...)` trực tiếp trong Controller để giữ cho Controller luôn mỏng (thin controller) và độc lập.
+* Thay vào đó, hãy inject **`ICurrentUserService`** vào Service hoặc Controller của bạn để lấy thông tin của người dùng đang đăng nhập:
+  - `_currentUserService.UserId`: Lấy ID của user hiện tại.
+  - `_currentUserService.Email`: Lấy Email của user hiện tại.
+  - `_currentUserService.IsInRole(UserRoles.Admin)`: Kiểm tra xem user hiện tại có vai trò nào đó không.
+
+### 4.5. Cơ chế Xóa Mềm (Soft Delete)
 * Theo quy định nghiệp vụ, các dữ liệu quản lý (Tòa nhà, Loại xe, Tầng, Khu vực, Slot, Người dùng) **không được phép xóa cứng** khỏi database.
 * Hãy sử dụng cờ `IsActive = false` và cập nhật ngày `UpdatedAt`.
 
