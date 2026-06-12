@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ParkingSystem.Application.Common;
@@ -31,14 +30,6 @@ public class UserController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetById(string id)
     {
-        var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var isAdmin = User.IsInRole(UserRoles.Admin);
-
-        if (currentUserId != id && !isAdmin)
-        {
-            return Forbid();
-        }
-
         var user = await _userService.GetByIdAsync(id);
         if (user == null)
         {
@@ -67,21 +58,6 @@ public class UserController : ControllerBase
     [HttpPut("{id}")]
     public async Task<ActionResult<ApiResponse<UserDto>>> Update(string id, [FromBody] UpdateUserDto updateUserDto)
     {
-        var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var isAdmin = User.IsInRole(UserRoles.Admin);
-
-        if (currentUserId != id && !isAdmin)
-        {
-            return Forbid();
-        }
-
-        // Non-admin cannot change roles or isActive status
-        if (!isAdmin)
-        {
-            updateUserDto.Roles = []; // Clear role modifications
-            updateUserDto.IsActive = null; // Prevent status change
-        }
-
         try
         {
             var user = await _userService.UpdateAsync(id, updateUserDto);

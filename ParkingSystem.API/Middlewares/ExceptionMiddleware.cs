@@ -33,12 +33,21 @@ public class ExceptionMiddleware
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         context.Response.ContentType = "application/json";
-        context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
-        var errorMessage = _env.IsDevelopment() 
-            ? exception.Message 
-            : "An unexpected error occurred on the server.";
+        var statusCode = HttpStatusCode.InternalServerError;
+        var errorMessage = "An unexpected error occurred on the server.";
 
+        if (exception is UnauthorizedAccessException)
+        {
+            statusCode = HttpStatusCode.Forbidden;
+            errorMessage = exception.Message;
+        }
+        else if (_env.IsDevelopment())
+        {
+            errorMessage = exception.Message;
+        }
+
+        context.Response.StatusCode = (int)statusCode;
         var errors = _env.IsDevelopment() ? exception.StackTrace : null;
 
         var response = ApiResponse.Fail(errorMessage, errors);

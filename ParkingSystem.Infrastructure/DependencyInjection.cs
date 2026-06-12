@@ -23,13 +23,16 @@ public static class DependencyInjection
         services.Configure<JwtSettings>(
             configuration.GetSection(nameof(JwtSettings)));
 
+        services.AddHttpContextAccessor();
+
         services.AddSingleton<MongoDbContext>();
         services.AddSingleton<MongoDbInitializer>();
 
         // Register custom services
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>();
-        services.AddSingleton<IUserService, UserService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IUserService, UserService>();
 
         // Configure JWT Authentication
         var secret = configuration["JwtSettings:Secret"] ?? "SuperSecretKeyForParkingManager1234567890!";
