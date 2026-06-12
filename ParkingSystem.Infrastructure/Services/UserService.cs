@@ -14,15 +14,18 @@ public class UserService : IUserService
     private readonly MongoDbContext _context;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
+    private readonly ICurrentUserService _currentUserService;
 
     public UserService(
         MongoDbContext context,
         IPasswordHasher passwordHasher,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<LoginResponseDto?> AuthenticateAsync(LoginDto loginDto)
@@ -52,6 +55,14 @@ public class UserService : IUserService
 
     public async Task<UserDto?> GetByIdAsync(string id)
     {
+        var currentUserId = _currentUserService.UserId;
+        var isAdmin = _currentUserService.IsInRole(UserRoles.Admin);
+
+        if (currentUserId != id && !isAdmin)
+        {
+            throw new UnauthorizedAccessException("You are not authorized to view this user profile.");
+        }
+
         var user = await _context.Users
             .Find(u => u.Id == id)
             .FirstOrDefaultAsync();
@@ -120,6 +131,14 @@ public class UserService : IUserService
 
     public async Task<UserDto?> UpdateAsync(string id, UpdateUserDto updateUserDto)
     {
+        var currentUserId = _currentUserService.UserId;
+        var isAdmin = _currentUserService.IsInRole(UserRoles.Admin);
+
+        if (currentUserId != id && !isAdmin)
+        {
+            throw new UnauthorizedAccessException("You are not authorized to update this user profile.");
+        }
+
         var user = await _context.Users
             .Find(u => u.Id == id)
             .FirstOrDefaultAsync();
@@ -127,6 +146,13 @@ public class UserService : IUserService
         if (user == null)
         {
             return null;
+        }
+
+        // Non-admin cannot change roles or isActive status
+        if (!isAdmin)
+        {
+            updateUserDto.Roles = []; // Clear role modifications
+            updateUserDto.IsActive = null; // Prevent status change
         }
 
         if (!string.IsNullOrEmpty(updateUserDto.Email) && updateUserDto.Email != user.Email)
