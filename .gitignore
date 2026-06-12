@@ -46,6 +46,7 @@ CodeCoverage/
 .vs/
 *.csproj.user
 appsettings.Local.json
+appsettings.Development.json
 .verify-build/
 
 # MSBuild Binary and Structured Log
