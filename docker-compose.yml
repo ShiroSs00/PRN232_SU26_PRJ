@@ -53,11 +53,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
-      - DatabaseSettings__DatabaseName=parking_auth_db
+      - MongoDbSettings__ConnectionString=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - MongoDbSettings__DatabaseName=parking_auth_db
       - JwtSettings__Secret=${JWT_SECRET:-YourSuperSecretKeyForJWTTokenGeneration123456}
-      - JwtSettings__Issuer=${JWT_ISSUER:-ParkingSystemAuthService}
-      - JwtSettings__Audience=${JWT_AUDIENCE:-ParkingSystemClients}
+      - JwtSettings__Issuer=${JWT_ISSUER:-ParkingSystemAPI}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-ParkingSystemClient}
       - JwtSettings__ExpirationInMinutes=${JWT_EXPIRY_MINUTES:-60}
     depends_on:
       mongodb:
@@ -77,8 +77,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
-      - DatabaseSettings__DatabaseName=parking_main_db
+      - MongoDbSettings__ConnectionString=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - MongoDbSettings__DatabaseName=parking_main_db
       - ServiceUrls__AuthService=http://auth-service:8080
       - ServiceUrls__PaymentService=http://payment-service:8080
     depends_on:
@@ -101,8 +101,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
-      - DatabaseSettings__DatabaseName=parking_payment_db
+      - MongoDbSettings__ConnectionString=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - MongoDbSettings__DatabaseName=parking_payment_db
       - ServiceUrls__AuthService=http://auth-service:8080
       - ServiceUrls__ParkingService=http://parking-service:8080
     depends_on:
@@ -125,8 +125,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
-      - DatabaseSettings__DatabaseName=parking_report_db
+      - MongoDbSettings__ConnectionString=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - MongoDbSettings__DatabaseName=parking_report_db
       - ServiceUrls__AuthService=http://auth-service:8080
       - ServiceUrls__ParkingService=http://parking-service:8080
       - ServiceUrls__PaymentService=http://payment-service:8080

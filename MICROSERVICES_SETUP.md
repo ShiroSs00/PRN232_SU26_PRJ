@@ -332,7 +332,9 @@ dotnet add package RabbitMQ.Client
 dotnet add package MassTransit
 dotnet add package MassTransit.RabbitMQ
 
-# Docker Compose đã có RabbitMQ config
+# Lưu ý: docker-compose.yml hiện CHƯA có RabbitMQ.
+# Nếu dùng message queue, tự thêm service rabbitmq vào docker-compose,
+# hoặc chạy: docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 ```
 
 ### Phase 9: Testing
@@ -390,14 +392,9 @@ File: `src/ApiGateway/ocelot.json`
 
 ```json
 {
-  "DatabaseSettings": {
-    "ConnectionString": "mongodb://admin:password123@localhost:27017",
-    "DatabaseName": "ParkingSystemDB",
-    "Collections": {
-      "Users": "users",
-      "Buildings": "buildings",
-      "ParkingSessions": "parking_sessions"
-    }
+  "MongoDbSettings": {
+    "ConnectionString": "mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority",
+    "DatabaseName": "parking_auth_db"
   }
 }
 ```
