@@ -1,17 +1,18 @@
 # Parking Manager
 
-Parking Manager is a parking lot management system for buildings. The system helps staff handle vehicle check-in/check-out, assign parking slots, calculate parking fees, confirm payments, and provide operational reports for facility managers.
+Parking Manager is a parking lot management system for buildings, built as a microservices solution. The system helps staff handle vehicle check-in/check-out, assign parking slots, calculate parking fees, confirm payments, and provide operational reports for facility managers.
 
 ## Project Status
 
-This repository currently contains the backend solution scaffold using ASP.NET Core and Clean Architecture-style project separation. The current implementation focuses on MongoDB document models, database context setup, indexes, seed data, and a small database test API.
+This repository contains the backend microservices scaffold using ASP.NET Core and Clean Architecture-style project separation. The current implementation focuses on the service skeleton: each service connects to its own MongoDB Atlas database and exposes health-check endpoints. Business logic (entities, controllers, use cases) is the next step.
 
 ## Tech Stack
 
 - ASP.NET Core Web API
 - .NET 8
-- Clean Architecture
-- MongoDB Atlas
+- Clean Architecture (per service)
+- Ocelot API Gateway
+- MongoDB Atlas (database per service)
 - MongoDB.Driver
 - Swagger/OpenAPI
 
@@ -19,21 +20,38 @@ This repository currently contains the backend solution scaffold using ASP.NET C
 
 ```txt
 PRN232_PRJ/
-|-- ParkingSystem.API/
-|-- ParkingSystem.Application/
-|-- ParkingSystem.Domain/
-|-- ParkingSystem.Infrastructure/
+|-- src/
+|   |-- ApiGateway/                 # Ocelot API Gateway
+|   |-- Shared/
+|   |   |-- Shared.Common/          # Shared settings, utilities
+|   |   `-- Shared.Contracts/       # Shared DTOs, cross-service interfaces
+|   `-- Services/
+|       |-- Auth/                   # Auth.API / Application / Domain / Infrastructure
+|       |-- Parking/                # Parking.API / Application / Domain / Infrastructure
+|       |-- Payment/                # Payment.API / Application / Domain / Infrastructure
+|       `-- Report/                 # Report.API / Application / Domain / Infrastructure
 |-- docs/
+|-- docker-compose.yml
 |-- PRN232_PRJ.sln
 `-- README.md
 ```
 
-## Layer Responsibilities
+Each service follows the same Clean Architecture layering:
 
-- `ParkingSystem.API`: controllers, request/response endpoints, authentication middleware, Swagger configuration.
-- `ParkingSystem.Application`: use cases, DTOs, service interfaces, validation, business orchestration.
-- `ParkingSystem.Domain`: entities, enums, domain rules, core business concepts.
-- `ParkingSystem.Infrastructure`: MongoDB settings, context, indexes, seed data, and infrastructure registration.
+- `*.API`: controllers, endpoints, Swagger, request pipeline.
+- `*.Application`: use cases, DTOs, service interfaces, validation.
+- `*.Domain`: entities, enums, domain rules.
+- `*.Infrastructure`: MongoDB context, configuration binding, infrastructure registration.
+
+## Services and Ports
+
+| Service | Port | Database |
+|---------|------|----------|
+| API Gateway | 5000 | - |
+| Auth | 5001 | `parking_auth_db` |
+| Parking | 5002 | `parking_main_db` |
+| Payment | 5003 | `parking_payment_db` |
+| Report | 5004 | `parking_report_db` |
 
 ## MVP Features
 
@@ -41,13 +59,14 @@ PRN232_PRJ/
 - Vehicle type management
 - Floor and zone management
 - Parking slot management
-- Vehicle check-in
-- Vehicle check-out
+- Vehicle check-in / check-out
 - Fee calculation
 - Payment confirmation
+- Monthly subscription
+- Shift reconciliation
 - Parking session history
 - Basic dashboard and reports
-- User and role document models
+- User and role management
 
 ## Main Roles
 
@@ -56,48 +75,30 @@ PRN232_PRJ/
 - `ParkingStaff`: handles vehicle check-in, check-out, slot updates, payments, and parking exceptions.
 - `Driver`: views parking information and optional driver-facing features.
 
-## Planned API Base URL
+## Configuration
 
-```txt
-/api/v1
-```
+Each service reads its MongoDB connection and JWT settings from `appsettings.json` under the `MongoDbSettings` and `JwtSettings` sections. `appsettings.json` is ignored by Git because it holds the real Atlas connection string with a password, so it is never pushed to GitHub.
 
-Main API modules:
-
-- `/buildings`
-- `/vehicle-types`
-- `/floors`
-- `/zones`
-- `/parking-slots`
-- `/parking-sessions`
-- `/fee-policies`
-- `/payments`
-- `/reports`
-- `/database-test`
-
-## MongoDB Configuration
-
-Keep the sample MongoDB Atlas connection string in `ParkingSystem.API/appsettings.json`. Do not commit a real database password.
+Expected `appsettings.json` shape per service (Auth shown as example):
 
 ```json
 {
   "MongoDbSettings": {
     "ConnectionString": "mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority",
-    "DatabaseName": "ParkingManagerDb"
+    "DatabaseName": "parking_auth_db"
+  },
+  "JwtSettings": {
+    "Secret": "<at-least-32-character-secret>",
+    "Issuer": "ParkingSystemAPI",
+    "Audience": "ParkingSystemClient",
+    "ExpiryMinutes": 60
   }
 }
 ```
 
-For local development, create `ParkingSystem.API/appsettings.Local.json`. This file is ignored by Git and can contain your real connection string:
+Set `DatabaseName` per service: `parking_auth_db`, `parking_main_db`, `parking_payment_db`, `parking_report_db`.
 
-```json
-{
-  "MongoDbSettings": {
-    "ConnectionString": "mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority&appName=<app-name>",
-    "DatabaseName": "ParkingManagerDb"
-  }
-}
-```
+Because `appsettings.json` is not committed, request the file from the project owner when setting up a new machine. No Docker is required to run the services; only MongoDB Atlas access via the connection string.
 
 ## How to Run
 
@@ -108,28 +109,31 @@ dotnet restore PRN232_PRJ.sln
 dotnet build PRN232_PRJ.sln
 ```
 
-Run the API:
+Run each service in its own terminal:
 
 ```bash
-dotnet run --project ParkingSystem.API
+dotnet run --project src/Services/Auth/Auth.API --urls "http://localhost:5001"
+dotnet run --project src/Services/Parking/Parking.API --urls "http://localhost:5002"
+dotnet run --project src/Services/Payment/Payment.API --urls "http://localhost:5003"
+dotnet run --project src/Services/Report/Report.API --urls "http://localhost:5004"
+dotnet run --project src/ApiGateway --urls "http://localhost:5000"
 ```
 
-Swagger is available in development mode at:
+## Health Checks
+
+Each service exposes:
 
 ```txt
-https://localhost:7174/swagger
-http://localhost:5295/swagger
+GET /health        # service is up
+GET /health/db     # MongoDB Atlas connection check
 ```
 
-Database test endpoints:
-
-```txt
-GET /api/v1/database-test/health
-GET /api/v1/database-test/seed-summary
-```
+Swagger is available in development mode at `/swagger` on each service port.
 
 ## Documentation
 
 Detailed project documentation is available at:
 
 - [Project Documentation](docs/PROJECT_DOCUMENTATION.md)
+- [Microservices Architecture](docs/MICROSERVICES_ARCHITECTURE.md)
+- [Architecture Diagram](docs/ARCHITECTURE_DIAGRAM.md)

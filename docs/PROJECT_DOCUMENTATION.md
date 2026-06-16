@@ -1,4 +1,4 @@
-# Parking Manager Project Documentation
+﻿# Parking Manager Project Documentation
 
 ## 1. Product Overview
 
@@ -623,220 +623,142 @@ GET /reports/subscriptions
 
 ## 8. Database Design
 
-### MVP Tables
+### Database Migration
 
-- Users
-- Roles
-- RefreshTokens
-- Buildings
-- Floors
-- Zones
-- VehicleTypes
-- ParkingSlots
-- FeePolicies
-- ParkingSessions
-- Payments
-- Subscriptions
-- Shifts
-- AuditLogs
+MongoDB does not use EF-style SQL migrations in this project. Each service owns a `MongoDbInitializer` that runs at startup and creates the required indexes for that service database.
 
-Note: User roles are embedded directly in the User document as a `Roles` string array (idiomatic MongoDB), so there is no separate UserRoles join collection. The Roles collection only defines role metadata and permissions.
+- Auth: `Auth.Infrastructure/Persistence/MongoDbInitializer.cs`
+- Parking: `Parking.Infrastructure/Persistence/MongoDbInitializer.cs`
+- Payment: `Payment.Infrastructure/Persistence/MongoDbInitializer.cs`
+- Report: `Report.Infrastructure/Persistence/MongoDbInitializer.cs`
 
-### Optional Tables
+The application uses database-per-service:
 
-- Reservations
-- Feedbacks
-- Notifications
-- CameraLogs
+| Service | Database | Startup migration |
+|---|---|---|
+| Auth Service | `parking_auth_db` | users, roles, refresh tokens, audit logs, notifications |
+| Parking Service | `parking_main_db` | parking structure, vehicles, slots, sessions, shifts, reservations, feedbacks |
+| Payment Service | `parking_payment_db` | fee policies, payments, transactions, subscriptions |
+| Report Service | `parking_report_db` | report-side audit logs and notifications |
+
+### Collections
+
+#### `parking_auth_db`
+
+- `users`
+- `roles`
+- `refresh_tokens`
+- `audit_logs`
+- `notifications`
+
+#### `parking_main_db`
+
+- `buildings`
+- `floors`
+- `zones`
+- `vehicle_types`
+- `vehicles`
+- `parking_slots`
+- `gates`
+- `parking_sessions`
+- `parking_session_logs`
+- `shifts`
+- `incident_reports`
+- `reservations`
+- `feedbacks`
+- `audit_logs`
+- `notifications`
+
+#### `parking_payment_db`
+
+- `fee_policies`
+- `payments`
+- `payment_transactions`
+- `subscriptions`
+- `subscription_payments`
+- `audit_logs`
+- `notifications`
+
+#### `parking_report_db`
+
+- `audit_logs`
+- `notifications`
+
+Report models such as `DashboardSummary`, `RevenueReport`, `OccupancyReport`, `VehicleFlowReport`, `ShiftReconciliationReport`, and `SubscriptionReport` are read models, not primary transactional collections yet.
 
 ### Main Entity Fields
 
-#### User
+#### Auth
 
-- Id
-- FullName
-- Email
-- PasswordHash
-- PhoneNumber
-- Roles (string array, e.g. ["Admin"], ["ParkingStaff"])
-- IsActive
-- CreatedAt
-- UpdatedAt
+- `User`: Id, FullName, Username, Email, PasswordHash, PhoneNumber, AvatarUrl, LastLoginAt, Roles, IsActive, CreatedAt, UpdatedAt
+- `Role`: Id, Name, Description, Permissions, IsActive, CreatedAt, UpdatedAt
+- `RefreshToken`: Id, UserId, Token, ExpiresAt, CreatedAt, IsRevoked
 
-#### Role
+#### Parking
 
-- Id
-- Name (unique, e.g. Admin, FacilityManager, ParkingStaff, Driver)
-- Description
-- Permissions (string array)
-- IsActive
-
-#### RefreshToken
-
-- Id
-- UserId
-- Token (unique)
-- ExpiresAt
-- CreatedAt
-- IsRevoked
-
-#### Building
-
-- Id
-- Name
-- Address
-- OpeningTime
-- ClosingTime
-- IsActive
-
-#### Floor
-
-- Id
-- BuildingId
-- FloorNumber
-- Name
-- IsActive
-
-#### Zone
-
-- Id
-- FloorId
-- VehicleTypeId
-- Name
-- Capacity
-- IsActive
-
-#### VehicleType
-
-- Id
-- Name
-- Description
-- IsActive
-
-#### ParkingSlot
-
-- Id
-- BuildingId
-- FloorId
-- ZoneId
-- VehicleTypeId
-- Code
-- Status
-- IsActive
-
-#### FeePolicy
-
-- Id
-- VehicleTypeId
-- Name
-- PricingType
-- BasePrice
-- HourlyPrice
-- DailyPrice
-- LostTicketFee
-- OvertimeFee
-- IsActive
-- EffectiveFrom
-- EffectiveTo
-
-#### ParkingSession
-
-- Id
-- PlateNumber
-- VehicleTypeId
-- ParkingSlotId
-- CheckInTime
-- CheckOutTime
-- EntryGate
-- ExitGate
-- Status
-- IsMonthly
-- SubscriptionId
-- TotalFee
-- CreatedByUserId
-- CompletedByUserId
+- `Building`: Id, Name, Address, Description, PhoneNumber, OpeningTime, ClosingTime, IsActive, CreatedAt, UpdatedAt
+- `Floor`: Id, BuildingId, FloorNumber, Name, IsActive, CreatedAt, UpdatedAt
+- `Zone`: Id, BuildingId, FloorId, VehicleTypeId, Name, Capacity, CurrentOccupancy, IsActive, CreatedAt, UpdatedAt
+- `VehicleType`: Id, Name, Description, IsActive, CreatedAt, UpdatedAt
+- `Vehicle`: Id, PlateNumber, PlateNumberNormalized, VehicleTypeId, OwnerUserId, OwnerName, OwnerPhone, OwnerEmail, Brand, Model, Color, ActiveSubscriptionId, Note, IsActive, CreatedAt, UpdatedAt
+- `ParkingSlot`: Id, BuildingId, FloorId, ZoneId, VehicleTypeId, Code, Status, CurrentSessionId, IsActive, CreatedAt, UpdatedAt
+- `Gate`: Id, BuildingId, Code, Name, Type, IsActive, CreatedAt, UpdatedAt
+- `ParkingSession`: Id, PlateNumber, VehicleTypeId, VehicleId, BuildingId, ZoneId, ParkingSlotId, ShiftId, PaymentId, ReservationId, CheckInTime, CheckOutTime, EntryGate, ExitGate, CheckInNote, CheckOutNote, Status, IsMonthly, SubscriptionId, TotalFee, CreatedByUserId, CompletedByUserId, CreatedAt, UpdatedAt
+- `ParkingSessionLog`: Id, ParkingSessionId, Action, FromParkingSlotId, ToParkingSlotId, Description, CreatedByUserId, CreatedAt
+- `Shift`: Id, StaffUserId, BuildingId, OpenedAt, ClosedAt, ExpectedCashAmount, TotalPayments, TotalNonCashAmount, CountedCashAmount, DifferenceAmount, Status, Note
+- `IncidentReport`: Id, BuildingId, ParkingSessionId, ParkingSlotId, VehicleId, PlateNumber, Title, Description, Status, ReportedByUserId, ResolvedByUserId, ResolvedAt, IsActive, CreatedAt, UpdatedAt
+- `Reservation`: Id, BuildingId, VehicleTypeId, PlateNumber, VehicleId, DriverUserId, ZoneId, ParkingSlotId, ReservedFrom, ReservedTo, Status, ParkingSessionId, CancelledByUserId, CancelledAt, Note, IsActive, CreatedAt, UpdatedAt
+- `Feedback`: Id, UserId, BuildingId, ParkingSessionId, PaymentId, VehicleId, PlateNumber, Rating, Content, Status, Response, RespondedByUserId, RespondedAt, IsActive, CreatedAt, UpdatedAt
 
 #### Payment
 
-- Id
-- ParkingSessionId
-- ShiftId
-- Amount
-- Method
-- Status
-- PaidAt
+- `FeePolicy`: Id, BuildingId, VehicleTypeId, Name, PricingType, BasePrice, HourlyPrice, DailyPrice, MonthlyPrice, LostTicketFee, OvertimeFee, EffectiveFrom, EffectiveTo, IsActive, CreatedAt, UpdatedAt
+- `Payment`: Id, ParkingSessionId, PlateNumber, VehicleId, ShiftId, CreatedByUserId, ConfirmedByUserId, TransactionCode, Amount, Method, Status, CreatedAt, PaidAt, RefundedAt, Note
+- `PaymentTransaction`: Id, PaymentId, Provider, TransactionCode, Amount, Method, Status, RequestPayload, ResponsePayload, CreatedAt, CompletedAt
+- `Subscription`: Id, PlateNumber, VehicleId, VehicleTypeId, BuildingId, OwnerName, OwnerPhone, StartDate, EndDate, MonthlyFee, Status, SuspendedAt, CancelledAt, Note, IsActive, CreatedAt, UpdatedAt
+- `SubscriptionPayment`: Id, SubscriptionId, PaymentId, PlateNumber, VehicleId, PeriodStart, PeriodEnd, Amount, Method, Status, CreatedByUserId, ConfirmedByUserId, CreatedAt, PaidAt, Note
 
-#### Subscription
+#### Shared
 
-- Id
-- PlateNumber
-- VehicleTypeId
-- BuildingId
-- OwnerName
-- OwnerPhone
-- StartDate
-- EndDate
-- MonthlyFee
-- Status
-- IsActive
-
-#### Shift
-
-- Id
-- StaffUserId
-- BuildingId
-- OpenedAt
-- ClosedAt
-- ExpectedCashAmount
-- CountedCashAmount
-- DifferenceAmount
-- Status
-- Note
-
-#### AuditLog
-
-- Id
-- UserId
-- Action
-- EntityName
-- EntityId
-- Description
-- CreatedAt
-
-> Note: AuditLog không gắn với một service nghiệp vụ cụ thể. Mỗi service tự ghi audit log vào collection `audit_logs` trong database của chính mình (ví dụ thao tác trên user ghi vào `parking_auth_db.audit_logs`).
+- `AuditLog`: Id, UserId, ServiceName, EntityName, EntityId, Action, OldValue, NewValue, CreatedAt
+- `Notification`: Id, UserId, Title, Message, Type, IsRead, CreatedAt, ReadAt
 
 ### Id Convention
 
-- Mỗi document dùng `_id` kiểu `ObjectId` của MongoDB làm khóa chính.
-- Trong code C#, map `_id` sang property `Id` kiểu `string` (dùng `[BsonRepresentation(BsonType.ObjectId)]`) để DTO và API trả về id dạng chuỗi, tránh lộ kiểu `ObjectId` ra ngoài.
-- Các trường tham chiếu chéo (ví dụ `VehicleTypeId`, `SubscriptionId`, `CreatedByUserId`) cũng lưu dạng `string` id. Vì là kiến trúc database-per-service, đây là tham chiếu logic (không có ràng buộc khóa ngoại giữa các database) — service phải tự kiểm tra tính hợp lệ khi cần.
+- Each document uses MongoDB `_id` as an `ObjectId` primary key.
+- In C#, `_id` is mapped to `Id` as `string` with `[BsonRepresentation(BsonType.ObjectId)]`.
+- Cross-service references such as `VehicleId`, `SubscriptionId`, `CreatedByUserId`, and `PaymentId` are logical string ids. MongoDB does not enforce foreign keys across service databases; each service validates references at application level.
 
 ### Indexes
 
-Các index đã được tạo trong code hiện tại (`MongoDbInitializer.cs`):
+Indexes are created by the startup `MongoDbInitializer` classes.
 
-| Collection | Field | Loại | Lý do |
-|---|---|---|---|
-| users | Email | unique | Đăng nhập, chặn trùng email |
-| roles | Name | unique | Chặn trùng tên role |
-| parking_slots | Code | unique | Mã slot là duy nhất |
-| parking_slots | Status | thường | Lọc slot trống/đang dùng |
-| parking_slots | BuildingId | thường | Lọc slot theo tòa nhà |
-| parking_sessions | PlateNumber | thường | Tra session active theo biển số |
-| parking_sessions | Status | thường | Lọc session đang active |
-| zones | BuildingId | thường | Lấy zone theo tòa nhà |
-| floors | BuildingId | thường | Lấy tầng theo tòa nhà |
-
-Index cần bổ sung khi các collection sau được implement theo thiết kế target:
-
-| Collection | Field | Loại | Lý do |
-|---|---|---|---|
-| refresh_tokens | Token | unique | Tra cứu / thu hồi token |
-| refresh_tokens | UserId | thường | Lấy token theo user |
-| subscriptions | PlateNumber | thường | Kiểm tra vé tháng lúc check-in |
-| payments | ParkingSessionId | thường | Tra payment theo session |
-| payments | ShiftId | thường | Tổng hợp tiền mặt theo ca |
-
+| Database | Collection | Index | Type | Purpose |
+|---|---|---|---|---|
+| auth | users | Username | unique | Login and duplicate username protection |
+| auth | users | Email | unique | Login and duplicate email protection |
+| auth | roles | Name | unique | Role name uniqueness |
+| auth | refresh_tokens | Token | unique | Token lookup/revocation |
+| parking | vehicle_types | Name | unique | Vehicle type uniqueness |
+| parking | vehicles | PlateNumberNormalized | unique | Vehicle lookup and duplicate plate protection |
+| parking | parking_slots | Code | unique | Slot code uniqueness |
+| parking | parking_slots | BuildingId, ZoneId, Status | normal | Find available slots quickly |
+| parking | gates | BuildingId, Code | unique | Gate code uniqueness inside a building |
+| parking | parking_sessions | PlateNumber, Status | normal | Find active session by plate |
+| parking | parking_sessions | VehicleId, CheckInTime | normal | Vehicle history |
+| parking | parking_sessions | BuildingId, Status | normal | Dashboard and occupancy queries |
+| parking | shifts | StaffUserId, Status | normal | Find open shift by staff |
+| parking | reservations | BuildingId, Status, ReservedFrom | normal | Reservation schedule lookup |
+| payment | fee_policies | BuildingId, VehicleTypeId, IsActive | normal | Fee calculation lookup |
+| payment | payments | ParkingSessionId | normal | Payment by session |
+| payment | payments | ShiftId | normal | Shift reconciliation |
+| payment | payments | VehicleId, CreatedAt | normal | Vehicle payment history |
+| payment | payment_transactions | Provider, TransactionCode | unique | External transaction idempotency |
+| payment | subscriptions | PlateNumber, Status | normal | Monthly check-in lookup |
+| payment | subscriptions | VehicleId, Status | normal | Active subscription by vehicle |
+| payment | subscription_payments | SubscriptionId, PeriodStart | normal | Subscription payment history |
+| all service DBs | audit_logs | EntityName, EntityId | normal | Audit trail by entity |
+| all service DBs | notifications | UserId, IsRead | normal | User unread notifications |
 ## 9. Business Rules
 
 - Only slots with `Available` status can be assigned to a vehicle.
@@ -981,4 +903,5 @@ The MVP is complete when the system can:
 - Record payments.
 - Show dashboard reports.
 - Authorize users by role.
+
 
