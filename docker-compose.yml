@@ -1,0 +1,172 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: parking_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: P@ssw0rd123
+      MONGO_INITDB_DATABASE: parking_system
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - parking_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (optional, for distributed caching)
+  redis:
+    image: redis:7-alpine
+    container_name: parking_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - parking_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # API Gateway (Ocelot)
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/Dockerfile
+    container_name: parking_api_gateway
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+    depends_on:
+      - auth-service
+      - parking-service
+      - payment-service
+      - report-service
+    networks:
+      - parking_network
+    restart: unless-stopped
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: src/Services/Auth/Auth.API/Dockerfile
+    container_name: parking_auth_service
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
+      - ConnectionStrings__Redis=redis:6379
+      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGeneration123456
+      - JwtSettings__Issuer=ParkingSystemAuthService
+      - JwtSettings__Audience=ParkingSystemClients
+      - JwtSettings__ExpirationInMinutes=60
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - parking_network
+    restart: unless-stopped
+
+  # Parking Service
+  parking-service:
+    build:
+      context: .
+      dockerfile: src/Services/Parking/Parking.API/Dockerfile
+    container_name: parking_parking_service
+    ports:
+      - "5002:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
+      - ConnectionStrings__Redis=redis:6379
+      - ServiceUrls__AuthService=http://auth-service:8080
+      - ServiceUrls__PaymentService=http://payment-service:8080
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - parking_network
+    restart: unless-stopped
+
+  # Payment Service
+  payment-service:
+    build:
+      context: .
+      dockerfile: src/Services/Payment/Payment.API/Dockerfile
+    container_name: parking_payment_service
+    ports:
+      - "5003:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
+      - ConnectionStrings__Redis=redis:6379
+      - ServiceUrls__AuthService=http://auth-service:8080
+      - ServiceUrls__ParkingService=http://parking-service:8080
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - parking_network
+    restart: unless-stopped
+
+  # Report Service
+  report-service:
+    build:
+      context: .
+      dockerfile: src/Services/Report/Report.API/Dockerfile
+    container_name: parking_report_service
+    ports:
+      - "5004:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
+      - ConnectionStrings__Redis=redis:6379
+      - ServiceUrls__AuthService=http://auth-service:8080
+      - ServiceUrls__ParkingService=http://parking-service:8080
+      - ServiceUrls__PaymentService=http://payment-service:8080
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - parking_network
+    restart: unless-stopped
+
+networks:
+  parking_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
