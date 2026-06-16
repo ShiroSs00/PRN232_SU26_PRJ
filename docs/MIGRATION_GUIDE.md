@@ -656,11 +656,11 @@ netstat -ano | findstr :5000
 
 ### Issue 2: MongoDB connection string different per service
 ```json
-// Solution: Mỗi service có config riêng
+// Solution: Mỗi service có config riêng (database-per-service)
 {
-  "DatabaseSettings": {
-    "ConnectionString": "mongodb://localhost:27017",
-    "DatabaseName": "ParkingSystemDB"
+  "MongoDbSettings": {
+    "ConnectionString": "mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority",
+    "DatabaseName": "parking_auth_db"
   }
 }
 ```

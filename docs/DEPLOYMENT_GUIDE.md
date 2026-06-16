@@ -215,7 +215,8 @@ az container create \
   --dns-name-label parking-auth \
   --ports 80 \
   --environment-variables \
-    DatabaseSettings__ConnectionString="YOUR_COSMOS_CONNECTION_STRING" \
+    MongoDbSettings__ConnectionString="YOUR_COSMOS_CONNECTION_STRING" \
+    MongoDbSettings__DatabaseName="parking_auth_db" \
     JwtSettings__Secret="YOUR_JWT_SECRET"
 
 # Parking Service
@@ -226,7 +227,8 @@ az container create \
   --dns-name-label parking-parking \
   --ports 80 \
   --environment-variables \
-    DatabaseSettings__ConnectionString="YOUR_COSMOS_CONNECTION_STRING" \
+    MongoDbSettings__ConnectionString="YOUR_COSMOS_CONNECTION_STRING" \
+    MongoDbSettings__DatabaseName="parking_main_db" \
     Services__AuthService="http://parking-auth.southeastasia.azurecontainer.io"
 
 # Payment Service
@@ -295,10 +297,11 @@ Runtime: .NET
 Build Command: dotnet publish -c Release -o out src/Services/Auth/Auth.API/Auth.API.csproj
 Start Command: dotnet out/Auth.API.dll --urls=http://0.0.0.0:$PORT
 Environment Variables:
-  - DatabaseSettings__ConnectionString: YOUR_MONGODB_URI
+  - MongoDbSettings__ConnectionString: YOUR_MONGODB_URI
+  - MongoDbSettings__DatabaseName: parking_auth_db
   - JwtSettings__Secret: YOUR_JWT_SECRET
-  - JwtSettings__Issuer: https://parking-auth-service.onrender.com
-  - JwtSettings__Audience: https://parking-gateway.onrender.com
+  - JwtSettings__Issuer: ParkingSystemAPI
+  - JwtSettings__Audience: ParkingSystemClient
 ```
 
 **Parking Service:**
@@ -308,7 +311,8 @@ Runtime: .NET
 Build Command: dotnet publish -c Release -o out src/Services/Parking/Parking.API/Parking.API.csproj
 Start Command: dotnet out/Parking.API.dll --urls=http://0.0.0.0:$PORT
 Environment Variables:
-  - DatabaseSettings__ConnectionString: YOUR_MONGODB_URI
+  - MongoDbSettings__ConnectionString: YOUR_MONGODB_URI
+  - MongoDbSettings__DatabaseName: parking_main_db
   - Services__AuthService: https://parking-auth-service.onrender.com
 ```
 
@@ -347,15 +351,18 @@ Disk: 1GB (free tier)
 ### Development (.env.local)
 
 ```env
-# Database
-DATABASE_CONNECTION_STRING=mongodb://localhost:27017
-DATABASE_NAME=ParkingSystemDB
+# Database (MongoDB Atlas - mỗi service 1 database riêng)
+MONGODB_CONNECTION_STRING=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+AUTH_DATABASE_NAME=parking_auth_db
+PARKING_DATABASE_NAME=parking_main_db
+PAYMENT_DATABASE_NAME=parking_payment_db
+REPORT_DATABASE_NAME=parking_report_db
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-min-32-characters
-JWT_ISSUER=http://localhost:5000
-JWT_AUDIENCE=http://localhost:5000
-JWT_EXPIRES_IN_MINUTES=60
+JWT_ISSUER=ParkingSystemAPI
+JWT_AUDIENCE=ParkingSystemClient
+JWT_EXPIRY_MINUTES=60
 
 # Service URLs
 AUTH_SERVICE_URL=http://localhost:5001
@@ -364,21 +371,22 @@ PAYMENT_SERVICE_URL=http://localhost:5003
 REPORT_SERVICE_URL=http://localhost:5004
 
 # CORS
-ALLOWED_ORIGINS=http://localhost:5173
+CORS_ORIGINS=http://localhost:5173
 ```
 
 ### Production (.env.production)
 
 ```env
-# Database
-DATABASE_CONNECTION_STRING=mongodb+srv://user:pass@cluster.mongodb.net
-DATABASE_NAME=ParkingSystemDB
+# Database (mỗi service 1 database riêng — đặt DATABASE_NAME tương ứng cho từng service)
+MONGODB_CONNECTION_STRING=mongodb+srv://user:pass@cluster.mongodb.net
+DATABASE_NAME=parking_auth_db
 
-# JWT
+# JWT (Issuer/Audience phải giống nhau trên mọi service để validate token)
 JWT_SECRET=${JWT_SECRET_FROM_VAULT}
-JWT_ISSUER=https://api.parking-system.com
-JWT_AUDIENCE=https://parking-system.com
-JWT_EXPIRES_IN_MINUTES=60
+JWT_ISSUER=ParkingSystemAPI
+JWT_AUDIENCE=ParkingSystemClient
+JWT_EXPIRY_MINUTES=60
+JWT_REFRESH_EXPIRY_DAYS=7
 
 # Service URLs
 AUTH_SERVICE_URL=https://auth.parking-system.com
@@ -387,7 +395,7 @@ PAYMENT_SERVICE_URL=https://payment.parking-system.com
 REPORT_SERVICE_URL=https://report.parking-system.com
 
 # CORS
-ALLOWED_ORIGINS=https://parking-system.com,https://www.parking-system.com
+CORS_ORIGINS=https://parking-system.com,https://www.parking-system.com
 ```
 
 ---
