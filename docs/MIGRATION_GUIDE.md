@@ -67,10 +67,10 @@ git checkout -b feature/microservices-architecture
 #### 1.3. Identify shared code
 
 **Code cần move sang Shared:**
-- `BaseEntity` → `ParkingSystem.Common`
-- DTOs → `ParkingSystem.Contracts`
+- `BaseEntity` → `Shared.Common`
+- DTOs → `Shared.Contracts`
 - MongoDB configuration → Mỗi service tự quản lý
-- JWT utilities → `ParkingSystem.Common`
+- JWT utilities → `Shared.Common`
 
 ---
 
@@ -80,16 +80,16 @@ git checkout -b feature/microservices-architecture
 
 ```bash
 # Common library
-dotnet new classlib -n ParkingSystem.Common -o src/Shared/ParkingSystem.Common
-dotnet add src/Shared/ParkingSystem.Common package Microsoft.Extensions.DependencyInjection.Abstractions
+dotnet new classlib -n Shared.Common -o src/Shared/Shared.Common
+dotnet add src/Shared/Shared.Common package Microsoft.Extensions.DependencyInjection.Abstractions
 
 # Contracts library
-dotnet new classlib -n ParkingSystem.Contracts -o src/Shared/ParkingSystem.Contracts
+dotnet new classlib -n Shared.Contracts -o src/Shared/Shared.Contracts
 ```
 
 **Di chuyển code:**
 
-`ParkingSystem.Common/` structure:
+`Shared.Common/` structure:
 ```
 Common/
 ├── Entities/
@@ -104,7 +104,7 @@ Common/
     └── Result.cs
 ```
 
-`ParkingSystem.Contracts/` structure:
+`Shared.Contracts/` structure:
 ```
 Contracts/
 ├── DTOs/
@@ -128,7 +128,7 @@ Contracts/
 
 ```bash
 # Tạo Gateway project
-dotnet new webapi -n ParkingSystem.Gateway -o src/ApiGateway
+dotnet new webapi -n ApiGateway -o src/ApiGateway
 cd src/ApiGateway
 
 # Add Ocelot

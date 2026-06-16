@@ -247,19 +247,19 @@ docker-compose down
 docker run -d -p 27017:27017 --name mongo-parking mongo:latest
 
 # Terminal 2: Auth Service
-cd src/Services/Auth.Service
+cd src/Services/Auth/Auth.API
 dotnet run --urls="http://localhost:5001"
 
 # Terminal 3: Parking Service
-cd src/Services/Parking.Service
+cd src/Services/Parking/Parking.API
 dotnet run --urls="http://localhost:5002"
 
 # Terminal 4: Payment Service
-cd src/Services/Payment.Service
+cd src/Services/Payment/Payment.API
 dotnet run --urls="http://localhost:5003"
 
 # Terminal 5: Report Service
-cd src/Services/Report.Service
+cd src/Services/Report/Report.API
 dotnet run --urls="http://localhost:5004"
 
 # Terminal 6: API Gateway

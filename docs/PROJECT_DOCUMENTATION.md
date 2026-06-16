@@ -12,9 +12,10 @@ The main goal is to digitize the parking workflow, reduce manual work, prevent f
 
 - ASP.NET Core Web API
 - .NET 8
+- Microservices Architecture (Ocelot API Gateway)
 - Clean Architecture
-- Entity Framework Core
-- PostgreSQL
+- MongoDB (MongoDB.Driver)
+- MongoDB Atlas (Cloud)
 - JWT Authentication
 - Swagger/OpenAPI
 
@@ -32,7 +33,7 @@ The main goal is to digitize the parking workflow, reduce manual work, prevent f
 
 - Frontend: Vercel or Netlify
 - Backend: Azure App Service, Render, or VPS
-- Database: Supabase PostgreSQL, Neon, or Railway PostgreSQL
+- Database: MongoDB Atlas (Cloud)
 
 ## 3. User Roles
 
