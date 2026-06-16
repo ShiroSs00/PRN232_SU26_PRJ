@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # MongoDB Database
+  # MongoDB Database (Optional - comment out if using MongoDB Atlas)
   mongodb:
     image: mongo:7.0
     container_name: parking_mongodb
@@ -20,22 +20,6 @@ services:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
       timeout: 5s
-      retries: 5
-
-  # Redis Cache (optional, for distributed caching)
-  redis:
-    image: redis:7-alpine
-    container_name: parking_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - parking_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
       retries: 5
 
   # API Gateway (Ocelot)
@@ -69,16 +53,14 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
-      - ConnectionStrings__Redis=redis:6379
-      - JwtSettings__Secret=YourSuperSecretKeyForJWTTokenGeneration123456
-      - JwtSettings__Issuer=ParkingSystemAuthService
-      - JwtSettings__Audience=ParkingSystemClients
-      - JwtSettings__ExpirationInMinutes=60
+      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - DatabaseSettings__DatabaseName=parking_auth_db
+      - JwtSettings__Secret=${JWT_SECRET:-YourSuperSecretKeyForJWTTokenGeneration123456}
+      - JwtSettings__Issuer=${JWT_ISSUER:-ParkingSystemAuthService}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-ParkingSystemClients}
+      - JwtSettings__ExpirationInMinutes=${JWT_EXPIRY_MINUTES:-60}
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - parking_network
@@ -95,14 +77,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
-      - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - DatabaseSettings__DatabaseName=parking_main_db
       - ServiceUrls__AuthService=http://auth-service:8080
       - ServiceUrls__PaymentService=http://payment-service:8080
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       auth-service:
         condition: service_started
@@ -121,14 +101,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
-      - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - DatabaseSettings__DatabaseName=parking_payment_db
       - ServiceUrls__AuthService=http://auth-service:8080
       - ServiceUrls__ParkingService=http://parking-service:8080
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       auth-service:
         condition: service_started
@@ -147,15 +125,13 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__MongoDB=mongodb://admin:P@ssw0rd123@mongodb:27017
-      - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__MongoDB=${MONGODB_CONNECTION_STRING:-mongodb://admin:P@ssw0rd123@mongodb:27017}
+      - DatabaseSettings__DatabaseName=parking_report_db
       - ServiceUrls__AuthService=http://auth-service:8080
       - ServiceUrls__ParkingService=http://parking-service:8080
       - ServiceUrls__PaymentService=http://payment-service:8080
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - parking_network
@@ -167,6 +143,4 @@ networks:
 
 volumes:
   mongodb_data:
-    driver: local
-  redis_data:
     driver: local
