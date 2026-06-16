@@ -269,46 +269,45 @@ GET /api/v1/reports/export/revenue (Excel/PDF)
 PRN232_SU26_PRJ/
 │
 ├── src/
-│   ├── Gateway/
-│   │   └── ParkingSystem.Gateway/
-│   │       ├── Program.cs
-│   │       ├── ocelot.json
-│   │       ├── ocelot.Development.json
-│   │       └── appsettings.json
+│   ├── ApiGateway/
+│   │   ├── Program.cs
+│   │   ├── ocelot.json
+│   │   ├── ocelot.Development.json
+│   │   └── appsettings.json
 │   │
 │   ├── Services/
 │   │   ├── Auth/
-│   │   │   ├── ParkingSystem.Auth.API/
-│   │   │   ├── ParkingSystem.Auth.Application/
-│   │   │   ├── ParkingSystem.Auth.Domain/
-│   │   │   └── ParkingSystem.Auth.Infrastructure/
+│   │   │   ├── Auth.API/
+│   │   │   ├── Auth.Application/
+│   │   │   ├── Auth.Domain/
+│   │   │   └── Auth.Infrastructure/
 │   │   │
 │   │   ├── Parking/
-│   │   │   ├── ParkingSystem.Parking.API/
-│   │   │   ├── ParkingSystem.Parking.Application/
-│   │   │   ├── ParkingSystem.Parking.Domain/
-│   │   │   └── ParkingSystem.Parking.Infrastructure/
+│   │   │   ├── Parking.API/
+│   │   │   ├── Parking.Application/
+│   │   │   ├── Parking.Domain/
+│   │   │   └── Parking.Infrastructure/
 │   │   │
 │   │   ├── Payment/
-│   │   │   ├── ParkingSystem.Payment.API/
-│   │   │   ├── ParkingSystem.Payment.Application/
-│   │   │   ├── ParkingSystem.Payment.Domain/
-│   │   │   └── ParkingSystem.Payment.Infrastructure/
+│   │   │   ├── Payment.API/
+│   │   │   ├── Payment.Application/
+│   │   │   ├── Payment.Domain/
+│   │   │   └── Payment.Infrastructure/
 │   │   │
 │   │   └── Report/
-│   │       ├── ParkingSystem.Report.API/
-│   │       ├── ParkingSystem.Report.Application/
-│   │       ├── ParkingSystem.Report.Domain/
-│   │       └── ParkingSystem.Report.Infrastructure/
+│   │       ├── Report.API/
+│   │       ├── Report.Application/
+│   │       ├── Report.Domain/
+│   │       └── Report.Infrastructure/
 │   │
 │   └── Shared/
-│       ├── ParkingSystem.Shared.Common/        # Common utilities
-│       ├── ParkingSystem.Shared.Contracts/     # DTOs, Events
-│       └── ParkingSystem.Shared.Infrastructure/ # Base classes
+│       ├── Shared.Common/        # Common utilities
+│       ├── Shared.Contracts/     # DTOs, Events
+│       └── Shared.Infrastructure/ # Base classes
 │
 ├── docker-compose.yml
 ├── docker-compose.override.yml
-└── PRN232_PRJ_Microservices.sln
+└── PRN232_PRJ.sln
 ```
 
 ## Database Strategy
@@ -430,11 +429,11 @@ JWT_SECRET=your-secret-key-here
 ```env
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://localhost:5001
-MONGODB_CONNECTION_STRING=mongodb://localhost:27017
-MONGODB_DATABASE_NAME=parking_system
+MONGODB_CONNECTION_STRING=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE_NAME=parking_auth_db
 JWT_SECRET=your-secret-key-here
-JWT_ISSUER=ParkingSystem.Auth
-JWT_AUDIENCE=ParkingSystem
+JWT_ISSUER=ParkingSystemAPI
+JWT_AUDIENCE=ParkingSystemClient
 JWT_EXPIRY_MINUTES=60
 ```
 
@@ -442,8 +441,8 @@ JWT_EXPIRY_MINUTES=60
 ```env
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://localhost:5002
-MONGODB_CONNECTION_STRING=mongodb://localhost:27017
-MONGODB_DATABASE_NAME=parking_system
+MONGODB_CONNECTION_STRING=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE_NAME=parking_main_db
 AUTH_SERVICE_URL=http://localhost:5001
 PAYMENT_SERVICE_URL=http://localhost:5003
 ```
@@ -452,8 +451,8 @@ PAYMENT_SERVICE_URL=http://localhost:5003
 ```env
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://localhost:5003
-MONGODB_CONNECTION_STRING=mongodb://localhost:27017
-MONGODB_DATABASE_NAME=parking_system
+MONGODB_CONNECTION_STRING=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE_NAME=parking_payment_db
 PARKING_SERVICE_URL=http://localhost:5002
 ```
 
@@ -461,8 +460,8 @@ PARKING_SERVICE_URL=http://localhost:5002
 ```env
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://localhost:5004
-MONGODB_CONNECTION_STRING=mongodb://localhost:27017
-MONGODB_DATABASE_NAME=parking_system
+MONGODB_CONNECTION_STRING=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE_NAME=parking_report_db
 AUTH_SERVICE_URL=http://localhost:5001
 PARKING_SERVICE_URL=http://localhost:5002
 PAYMENT_SERVICE_URL=http://localhost:5003
@@ -477,23 +476,23 @@ PAYMENT_SERVICE_URL=http://localhost:5003
 Chạy từng service manually:
 ```bash
 # Terminal 1: Gateway
-cd src/Gateway/ParkingSystem.Gateway
+cd src/ApiGateway
 dotnet run
 
 # Terminal 2: Auth Service
-cd src/Services/Auth/ParkingSystem.Auth.API
+cd src/Services/Auth/Auth.API
 dotnet run
 
 # Terminal 3: Parking Service
-cd src/Services/Parking/ParkingSystem.Parking.API
+cd src/Services/Parking/Parking.API
 dotnet run
 
 # Terminal 4: Payment Service
-cd src/Services/Payment/ParkingSystem.Payment.API
+cd src/Services/Payment/Payment.API
 dotnet run
 
 # Terminal 5: Report Service
-cd src/Services/Report/ParkingSystem.Report.API
+cd src/Services/Report/Report.API
 dotnet run
 ```
 

@@ -16,35 +16,35 @@ NC='\033[0m' # No Color
 # Start services in separate terminals (Windows)
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
     echo -e "${GREEN}🔐 Starting Auth Service...${NC}"
-    start cmd /k "cd src/Services/AuthService && dotnet run"
+    start cmd /k "cd src/Services/Auth/Auth.API && dotnet run"
 
     echo -e "${GREEN}🚗 Starting Parking Service...${NC}"
-    start cmd /k "cd src/Services/ParkingService && dotnet run"
+    start cmd /k "cd src/Services/Parking/Parking.API && dotnet run"
 
     echo -e "${GREEN}💳 Starting Payment Service...${NC}"
-    start cmd /k "cd src/Services/PaymentService && dotnet run"
+    start cmd /k "cd src/Services/Payment/Payment.API && dotnet run"
 
     echo -e "${GREEN}📊 Starting Report Service...${NC}"
-    start cmd /k "cd src/Services/ReportService && dotnet run"
+    start cmd /k "cd src/Services/Report/Report.API && dotnet run"
 
     echo -e "${BLUE}🌐 Starting API Gateway...${NC}"
     start cmd /k "cd src/ApiGateway && dotnet run"
 else
-    # For Unix-based systems
+    # For Unix-based systems - chạy mỗi service trong subshell để cd không tích lũy
     echo -e "${GREEN}🔐 Starting Auth Service...${NC}"
-    cd src/Services/AuthService && dotnet run &
+    (cd src/Services/Auth/Auth.API && dotnet run) &
 
     echo -e "${GREEN}🚗 Starting Parking Service...${NC}"
-    cd src/Services/ParkingService && dotnet run &
+    (cd src/Services/Parking/Parking.API && dotnet run) &
 
     echo -e "${GREEN}💳 Starting Payment Service...${NC}"
-    cd src/Services/PaymentService && dotnet run &
+    (cd src/Services/Payment/Payment.API && dotnet run) &
 
     echo -e "${GREEN}📊 Starting Report Service...${NC}"
-    cd src/Services/ReportService && dotnet run &
+    (cd src/Services/Report/Report.API && dotnet run) &
 
     echo -e "${BLUE}🌐 Starting API Gateway...${NC}"
-    cd src/ApiGateway && dotnet run &
+    (cd src/ApiGateway && dotnet run) &
 fi
 
 echo ""

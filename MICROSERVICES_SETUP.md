@@ -25,7 +25,7 @@ Hệ thống Parking Manager được thiết kế theo kiến trúc **Microserv
 PRN232_SU26_PRJ/
 ├── src/
 │   ├── ApiGateway/                    # Ocelot API Gateway
-│   │   ├── ParkingSystem.Gateway.csproj
+│   │   ├── ApiGateway.csproj
 │   │   ├── Program.cs
 │   │   ├── ocelot.json
 │   │   └── ocelot.Development.json
@@ -56,8 +56,8 @@ PRN232_SU26_PRJ/
 │   │       └── Report.Infrastructure/
 │   │
 │   └── Shared/                        # Shared libraries
-│       ├── ParkingSystem.Common/      # Common utilities
-│       └── ParkingSystem.Contracts/   # Shared DTOs & Interfaces
+│       ├── Shared.Common/      # Common utilities
+│       └── Shared.Contracts/   # Shared DTOs & Interfaces
 │
 ├── docs/
 │   ├── PROJECT_DOCUMENTATION.md
@@ -200,22 +200,22 @@ curl http://localhost:5004/health
 
 ```bash
 # 1. Tạo Common library
-dotnet new classlib -n ParkingSystem.Common -o src/Shared/ParkingSystem.Common
-dotnet add src/Shared/ParkingSystem.Common package Microsoft.Extensions.DependencyInjection.Abstractions
+dotnet new classlib -n Shared.Common -o src/Shared/Shared.Common
+dotnet add src/Shared/Shared.Common package Microsoft.Extensions.DependencyInjection.Abstractions
 
 # 2. Tạo Contracts library
-dotnet new classlib -n ParkingSystem.Contracts -o src/Shared/ParkingSystem.Contracts
+dotnet new classlib -n Shared.Contracts -o src/Shared/Shared.Contracts
 ```
 
 **Nội dung cần implement:**
-- `ParkingSystem.Common`: BaseEntity, Result pattern, Extensions, Middleware
-- `ParkingSystem.Contracts`: Shared DTOs, Events, Interfaces
+- `Shared.Common`: BaseEntity, Result pattern, Extensions, Middleware
+- `Shared.Contracts`: Shared DTOs, Events, Interfaces
 
 ### Phase 3: API Gateway
 
 ```bash
 # 1. Tạo Gateway project
-dotnet new webapi -n ParkingSystem.Gateway -o src/ApiGateway
+dotnet new webapi -n ApiGateway -o src/ApiGateway
 cd src/ApiGateway
 
 # 2. Add Ocelot package

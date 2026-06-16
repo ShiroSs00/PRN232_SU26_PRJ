@@ -15,19 +15,19 @@
 ### Phase 1: Shared Libraries (1-2 ngày)
 **Mục đích:** Tạo các thư viện dùng chung giữa các services
 
-1. **ParkingSystem.Shared.Contracts**
+1. **Shared.Contracts**
    - DTOs: Request/Response models
    - Interfaces: IAuthService, IParkingService, etc.
    - Constants: StatusCodes, Roles, Permissions
    - Enums: VehicleType, PaymentMethod, SessionStatus
 
-2. **ParkingSystem.Shared.Common**
+2. **Shared.Common**
    - Base entities: BaseEntity, AuditableEntity
    - Pagination models: PagedResult<T>
    - API response wrapper: ApiResponse<T>
    - Extensions: StringExtensions, DateTimeExtensions
 
-3. **ParkingSystem.Shared.Infrastructure**
+3. **Shared.Infrastructure**
    - MongoDB base repository
    - JWT authentication helper
    - Logging configuration
@@ -38,14 +38,14 @@
 ### Phase 2: Auth Service (2-3 ngày)
 
 ```
-src/Services/AuthService/
-├── AuthService.API/
+src/Services/Auth/
+├── Auth.API/
 │   ├── Controllers/
 │   │   ├── AuthController.cs
 │   │   └── UsersController.cs
 │   ├── Program.cs
 │   └── appsettings.json
-├── AuthService.Application/
+├── Auth.Application/
 │   ├── Services/
 │   │   ├── AuthService.cs
 │   │   └── UserService.cs
@@ -54,12 +54,12 @@ src/Services/AuthService/
 │   │   ├── LoginResponse.cs
 │   │   └── UserDto.cs
 │   └── Interfaces/
-├── AuthService.Domain/
+├── Auth.Domain/
 │   ├── Entities/
 │   │   ├── User.cs
 │   │   └── Role.cs
 │   └── ValueObjects/
-└── AuthService.Infrastructure/
+└── Auth.Infrastructure/
     ├── Data/
     │   └── AuthDbContext.cs
     ├── Repositories/
@@ -92,8 +92,8 @@ DELETE /api/v1/users/{id}
 ### Phase 3: Parking Service (3-4 ngày)
 
 ```
-src/Services/ParkingService/
-├── ParkingService.API/
+src/Services/Parking/
+├── Parking.API/
 │   ├── Controllers/
 │   │   ├── BuildingsController.cs
 │   │   ├── VehicleTypesController.cs
@@ -104,7 +104,7 @@ src/Services/ParkingService/
 │   │   └── ShiftsController.cs
 │   ├── Program.cs
 │   └── appsettings.json
-├── ParkingService.Application/
+├── Parking.Application/
 │   ├── Services/
 │   │   ├── BuildingService.cs
 │   │   ├── ParkingSessionService.cs
@@ -112,7 +112,7 @@ src/Services/ParkingService/
 │   │   └── ShiftService.cs
 │   ├── DTOs/
 │   └── Interfaces/
-├── ParkingService.Domain/
+├── Parking.Domain/
 │   ├── Entities/
 │   │   ├── Building.cs
 │   │   ├── Floor.cs
@@ -124,7 +124,7 @@ src/Services/ParkingService/
 │   └── Enums/
 │       ├── SlotStatus.cs
 │       └── SessionStatus.cs
-└── ParkingService.Infrastructure/
+└── Parking.Infrastructure/
     ├── Data/
     ├── Repositories/
     └── DependencyInjection.cs
@@ -148,15 +148,15 @@ src/Services/ParkingService/
 ### Phase 4: Payment Service (2-3 ngày)
 
 ```
-src/Services/PaymentService/
-├── PaymentService.API/
+src/Services/Payment/
+├── Payment.API/
 │   ├── Controllers/
 │   │   ├── FeePoliciesController.cs
 │   │   ├── PaymentsController.cs
 │   │   └── SubscriptionsController.cs
 │   ├── Program.cs
 │   └── appsettings.json
-├── PaymentService.Application/
+├── Payment.Application/
 │   ├── Services/
 │   │   ├── FeePolicyService.cs
 │   │   ├── PaymentService.cs
@@ -164,7 +164,7 @@ src/Services/PaymentService/
 │   │   └── SubscriptionService.cs
 │   ├── DTOs/
 │   └── Interfaces/
-├── PaymentService.Domain/
+├── Payment.Domain/
 │   ├── Entities/
 │   │   ├── FeePolicy.cs
 │   │   ├── Payment.cs
@@ -173,7 +173,7 @@ src/Services/PaymentService/
 │       ├── PricingType.cs
 │       ├── PaymentMethod.cs
 │       └── PaymentStatus.cs
-└── PaymentService.Infrastructure/
+└── Payment.Infrastructure/
     ├── Data/
     ├── Repositories/
     └── DependencyInjection.cs
@@ -196,13 +196,13 @@ src/Services/PaymentService/
 ### Phase 5: Report Service (2 ngày)
 
 ```
-src/Services/ReportService/
-├── ReportService.API/
+src/Services/Report/
+├── Report.API/
 │   ├── Controllers/
 │   │   └── ReportsController.cs
 │   ├── Program.cs
 │   └── appsettings.json
-├── ReportService.Application/
+├── Report.Application/
 │   ├── Services/
 │   │   ├── RevenueReportService.cs
 │   │   ├── OccupancyReportService.cs
@@ -210,12 +210,12 @@ src/Services/ReportService/
 │   │   └── ShiftReconciliationReportService.cs
 │   ├── DTOs/
 │   └── Interfaces/
-├── ReportService.Domain/
+├── Report.Domain/
 │   └── Models/
 │       ├── RevenueReport.cs
 │       ├── OccupancyReport.cs
 │       └── VehicleFlowReport.cs
-└── ReportService.Infrastructure/
+└── Report.Infrastructure/
     ├── Data/
     └── Queries/
         └── ReportQueries.cs
@@ -488,9 +488,9 @@ cp .env.example .env
 
 # 4. Bắt đầu với Shared Libraries
 cd src/Shared
-dotnet new classlib -n ParkingSystem.Shared.Contracts
-dotnet new classlib -n ParkingSystem.Shared.Common
-dotnet new classlib -n ParkingSystem.Shared.Infrastructure
+dotnet new classlib -n Shared.Contracts
+dotnet new classlib -n Shared.Common
+dotnet new classlib -n Shared.Infrastructure
 
 # 5. Sau đó làm Auth Service
 cd src/Services
