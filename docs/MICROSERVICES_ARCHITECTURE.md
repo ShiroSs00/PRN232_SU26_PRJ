@@ -30,10 +30,10 @@
                            ▼
             ┌──────────────────────────┐
             │   MongoDB Database       │
-            │   - auth_db              │
-            │   - parking_db           │
-            │   - payment_db           │
-            │   - report_db            │
+            │   - parking_auth_db      │
+            │   - parking_main_db      │
+            │   - parking_payment_db   │
+            │   - parking_report_db    │
             └──────────────────────────┘
 ```
 
@@ -85,10 +85,9 @@ GET    /api/v1/roles
 POST   /api/v1/roles
 ```
 
-**Database Collections (auth_db):**
-- users
-- roles
-- user_roles
+**Database Collections (parking_auth_db):**
+- users (Roles nhúng trực tiếp dạng string[])
+- roles (định nghĩa Permissions cho từng role)
 - refresh_tokens
 
 **Dependencies:**
@@ -164,7 +163,7 @@ POST   /api/v1/shifts/open
 POST   /api/v1/shifts/{id}/close
 ```
 
-**Database Collections (parking_db):**
+**Database Collections (parking_main_db):**
 - buildings
 - floors
 - zones
@@ -222,7 +221,7 @@ POST   /api/v1/subscriptions/{id}/suspend
 POST   /api/v1/subscriptions/{id}/cancel
 ```
 
-**Database Collections (payment_db):**
+**Database Collections (parking_payment_db):**
 - fee_policies
 - payments
 - subscriptions
@@ -254,7 +253,7 @@ GET /api/v1/reports/subscriptions
 GET /api/v1/reports/export/revenue (Excel/PDF)
 ```
 
-**Database Collections (report_db):**
+**Database Collections (parking_report_db):**
 - Chủ yếu READ từ các services khác
 - Có thể cache aggregated data
 
@@ -312,36 +311,25 @@ PRN232_SU26_PRJ/
 
 ## Database Strategy
 
-### Option 1: Database per Service (Recommended)
-Mỗi service có MongoDB database riêng:
-- `auth_db`
-- `parking_db`
-- `payment_db`
-- `report_db`
+**Quyết định: Database per Service** — mỗi service sở hữu một database MongoDB riêng trên cùng một cluster MongoDB Atlas. Đây là cách tiếp cận chuẩn microservices và khớp với cấu hình thật trong `docker-compose.yml` / `.env`.
+
+| Service | Database |
+|---------|----------|
+| Auth Service | `parking_auth_db` |
+| Parking Service | `parking_main_db` |
+| Payment Service | `parking_payment_db` |
+| Report Service | `parking_report_db` |
 
 **Ưu điểm:**
-- True microservices isolation
-- Schema changes không affect services khác
+- True microservices isolation — mỗi service tự quản lý schema của mình
+- Schema changes không ảnh hưởng service khác
 - Scale independently
 
-**Nhược điểm:**
-- Không thể JOIN across databases
-- Phải implement eventual consistency
+**Nhược điểm & cách xử lý:**
+- Không thể JOIN across databases → dùng inter-service HTTP call (xem phần Inter-service Communication)
+- Cần eventual consistency → với phạm vi đồ án, dữ liệu tham chiếu chéo (ví dụ `VehicleTypeId`) được xác thực qua HTTP call lúc ghi, chấp nhận độ trễ nhỏ
 
-### Option 2: Shared Database (Easier)
-1 MongoDB database, mỗi service có collections riêng:
-- Prefix: `auth_*`, `parking_*`, `payment_*`, `report_*`
-
-**Ưu điểm:**
-- Dễ setup
-- Có thể query across collections
-- Easier for development
-
-**Nhược điểm:**
-- Không phải true microservices
-- Tight coupling
-
-**Quyết định: Dùng Option 2 cho môn học (đơn giản hơn)**
+**Lưu ý về tham chiếu chéo service:** Vì các database tách biệt, một document ở service này tham chiếu document ở service khác bằng cách **lưu Id dạng string** (ví dụ `ParkingSession.VehicleTypeId` trỏ tới `vehicle_types` bên Parking, `ParkingSession.SubscriptionId` trỏ tới `subscriptions` bên Payment). Không có ràng buộc khóa ngoại ở tầng database — tính toàn vẹn được đảm bảo ở tầng application.
 
 ---
 

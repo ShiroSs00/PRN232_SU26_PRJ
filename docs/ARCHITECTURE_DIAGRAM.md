@@ -60,10 +60,10 @@
         │  ┌──────────────────────────────┐    │
         │  │     MongoDB Cluster          │    │
         │  │                              │    │
-        │  │  - auth_db                   │    │
-        │  │  - parking_db                │    │
-        │  │  - payment_db                │    │
-        │  │  - report_db                 │    │
+        │  │  - parking_auth_db           │    │
+        │  │  - parking_main_db           │    │
+        │  │  - parking_payment_db        │    │
+        │  │  - parking_report_db         │    │
         │  │                              │    │
         │  └──────────────────────────────┘    │
         │                                       │
@@ -79,9 +79,8 @@
 │                        Auth Context                             │
 │                                                                 │
 │  Entities:                                                      │
-│  - User                                                         │
-│  - Role                                                         │
-│  - UserRole                                                     │
+│  - User (Roles nhúng dạng string[])                             │
+│  - Role (metadata + permissions)                                │
 │  - RefreshToken                                                 │
 │                                                                 │
 │  Responsibilities:                                              │
@@ -277,7 +276,7 @@
 
 ## 5. Database Schema per Service
 
-### Auth Service - auth_db
+### Auth Service - parking_auth_db
 
 ```
 ┌─────────────────────────────────────────┐
@@ -285,46 +284,43 @@
 ├─────────────────────────────────────────┤
 │ _id: ObjectId (PK)                      │
 │ FullName: string                        │
-│ Email: string (unique)                  │
+│ Email: string (unique index)            │
 │ PasswordHash: string                    │
 │ PhoneNumber: string                     │
+│ Roles: string[]   (embedded, vd ["Admin"])│
 │ IsActive: bool                          │
 │ CreatedAt: DateTime                     │
 │ UpdatedAt: DateTime                     │
 └─────────────────────────────────────────┘
+  Roles nhúng thẳng vào User (idiomatic MongoDB)
+  → JWT claims lấy trực tiếp từ User.Roles,
+    không cần join collection UserRoles.
 
 ┌─────────────────────────────────────────┐
 │               Roles                     │
 ├─────────────────────────────────────────┤
 │ _id: ObjectId (PK)                      │
-│ Name: string (unique)                   │
+│ Name: string (unique index)             │
 │ Description: string                     │
 │ Permissions: string[]                   │
 │ IsActive: bool                          │
 └─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│             UserRoles                   │
-├─────────────────────────────────────────┤
-│ _id: ObjectId (PK)                      │
-│ UserId: ObjectId (FK → Users)           │
-│ RoleId: ObjectId (FK → Roles)           │
-│ AssignedAt: DateTime                    │
-└─────────────────────────────────────────┘
+  Bảng tra cứu định nghĩa role + permission.
+  User.Roles tham chiếu tới Roles.Name.
 
 ┌─────────────────────────────────────────┐
 │           RefreshTokens                 │
 ├─────────────────────────────────────────┤
 │ _id: ObjectId (PK)                      │
 │ UserId: ObjectId (FK → Users)           │
-│ Token: string (unique)                  │
+│ Token: string (unique index)            │
 │ ExpiresAt: DateTime                     │
 │ CreatedAt: DateTime                     │
 │ IsRevoked: bool                         │
 └─────────────────────────────────────────┘
 ```
 
-### Parking Service - parking_db
+### Parking Service - parking_main_db
 
 ```
 ┌─────────────────────────────────────────┐
@@ -348,13 +344,35 @@
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
+│               Floors                    │
+├─────────────────────────────────────────┤
+│ _id: ObjectId (PK)                      │
+│ BuildingId: ObjectId (FK → Buildings)   │
+│ FloorNumber: int                        │
+│ Name: string                            │
+│ IsActive: bool                          │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│               Zones                     │
+├─────────────────────────────────────────┤
+│ _id: ObjectId (PK)                      │
+│ FloorId: ObjectId (FK → Floors)         │
+│ VehicleTypeId: ObjectId (FK)            │
+│ Name: string                            │
+│ Capacity: int                           │
+│ IsActive: bool                          │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
 │             ParkingSlots                │
 ├─────────────────────────────────────────┤
 │ _id: ObjectId (PK)                      │
-│ BuildingId: ObjectId (FK)               │
-│ ZoneId: ObjectId (FK)                   │
+│ BuildingId: ObjectId (FK → Buildings)   │
+│ FloorId: ObjectId (FK → Floors)         │
+│ ZoneId: ObjectId (FK → Zones)           │
 │ VehicleTypeId: ObjectId (FK)            │
-│ Code: string                            │
+│ Code: string (unique)                   │
 │ Status: string (enum)                   │
 │ IsActive: bool                          │
 └─────────────────────────────────────────┘
@@ -373,6 +391,7 @@
 │ SubscriptionId: ObjectId? (FK)          │
 │ TotalFee: decimal                       │
 │ CreatedByUserId: ObjectId (FK)          │
+│ CompletedByUserId: ObjectId? (FK)       │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
@@ -391,7 +410,7 @@
 └─────────────────────────────────────────┘
 ```
 
-### Payment Service - payment_db
+### Payment Service - parking_payment_db
 
 ```
 ┌─────────────────────────────────────────┐
@@ -451,24 +470,18 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                    Developer Machine                        │
 │                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              Docker Containers                      │   │
-│  │                                                     │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐         │   │
-│  │  │  Auth    │  │ Parking  │  │ Payment  │         │   │
-│  │  │ Service  │  │ Service  │  │ Service  │   ...   │   │
-│  │  └──────────┘  └──────────┘  └──────────┘         │   │
-│  │                                                     │   │
-│  │  ┌─────────────────────────────────────┐           │   │
-│  │  │         Ocelot Gateway              │           │   │
-│  │  └─────────────────────────────────────┘           │   │
-│  │                                                     │   │
-│  │  ┌─────────────────────────────────────┐           │   │
-│  │  │         MongoDB                     │           │   │
-│  │  └─────────────────────────────────────┘           │   │
-│  │                                                     │   │
-│  └─────────────────────────────────────────────────────┘   │
+│  4 Services + Ocelot Gateway chạy bằng `dotnet run`         │
+│  (hoặc docker-compose, KHÔNG bao gồm MongoDB)               │
 │                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │  Auth    │  │ Parking  │  │ Payment  │  │  Report  │    │
+│  │ :5001    │  │ :5002    │  │ :5003    │  │ :5004    │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+│                                                             │
+│  ┌─────────────────────────────────────┐                   │
+│  │     Ocelot Gateway  :5000           │                   │
+│  └─────────────────────────────────────┘                   │
+│                            │                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -504,9 +517,10 @@
 │  ┌────────────────────▼────────────────────────────────┐     │
 │  │      Azure Cosmos DB for MongoDB                    │     │
 │  │                                                      │     │
-│  │  - auth_db (replica set)                            │     │
-│  │  - parking_db (replica set)                         │     │
-│  │  - payment_db (replica set)                         │     │
+│  │  - parking_auth_db (replica set)                    │     │
+│  │  - parking_main_db (replica set)                    │     │
+│  │  - parking_payment_db (replica set)                 │     │
+│  │  - parking_report_db (replica set)                  │     │
 │  └──────────────────────────────────────────────────────┘     │
 │                                                               │
 │  ┌──────────────────────────────────────────────────────┐    │

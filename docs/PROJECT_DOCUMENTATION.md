@@ -627,7 +627,7 @@ GET /reports/subscriptions
 
 - Users
 - Roles
-- UserRoles
+- RefreshTokens
 - Buildings
 - Floors
 - Zones
@@ -639,6 +639,8 @@ GET /reports/subscriptions
 - Subscriptions
 - Shifts
 - AuditLogs
+
+Note: User roles are embedded directly in the User document as a `Roles` string array (idiomatic MongoDB), so there is no separate UserRoles join collection. The Roles collection only defines role metadata and permissions.
 
 ### Optional Tables
 
@@ -656,9 +658,27 @@ GET /reports/subscriptions
 - Email
 - PasswordHash
 - PhoneNumber
+- Roles (string array, e.g. ["Admin"], ["ParkingStaff"])
 - IsActive
 - CreatedAt
 - UpdatedAt
+
+#### Role
+
+- Id
+- Name (unique, e.g. Admin, FacilityManager, ParkingStaff, Driver)
+- Description
+- Permissions (string array)
+- IsActive
+
+#### RefreshToken
+
+- Id
+- UserId
+- Token (unique)
+- ExpiresAt
+- CreatedAt
+- IsRevoked
 
 #### Building
 
@@ -696,6 +716,8 @@ GET /reports/subscriptions
 #### ParkingSlot
 
 - Id
+- BuildingId
+- FloorId
 - ZoneId
 - VehicleTypeId
 - Code
@@ -770,6 +792,50 @@ GET /reports/subscriptions
 - DifferenceAmount
 - Status
 - Note
+
+#### AuditLog
+
+- Id
+- UserId
+- Action
+- EntityName
+- EntityId
+- Description
+- CreatedAt
+
+> Note: AuditLog không gắn với một service nghiệp vụ cụ thể. Mỗi service tự ghi audit log vào collection `audit_logs` trong database của chính mình (ví dụ thao tác trên user ghi vào `parking_auth_db.audit_logs`).
+
+### Id Convention
+
+- Mỗi document dùng `_id` kiểu `ObjectId` của MongoDB làm khóa chính.
+- Trong code C#, map `_id` sang property `Id` kiểu `string` (dùng `[BsonRepresentation(BsonType.ObjectId)]`) để DTO và API trả về id dạng chuỗi, tránh lộ kiểu `ObjectId` ra ngoài.
+- Các trường tham chiếu chéo (ví dụ `VehicleTypeId`, `SubscriptionId`, `CreatedByUserId`) cũng lưu dạng `string` id. Vì là kiến trúc database-per-service, đây là tham chiếu logic (không có ràng buộc khóa ngoại giữa các database) — service phải tự kiểm tra tính hợp lệ khi cần.
+
+### Indexes
+
+Các index đã được tạo trong code hiện tại (`MongoDbInitializer.cs`):
+
+| Collection | Field | Loại | Lý do |
+|---|---|---|---|
+| users | Email | unique | Đăng nhập, chặn trùng email |
+| roles | Name | unique | Chặn trùng tên role |
+| parking_slots | Code | unique | Mã slot là duy nhất |
+| parking_slots | Status | thường | Lọc slot trống/đang dùng |
+| parking_slots | BuildingId | thường | Lọc slot theo tòa nhà |
+| parking_sessions | PlateNumber | thường | Tra session active theo biển số |
+| parking_sessions | Status | thường | Lọc session đang active |
+| zones | BuildingId | thường | Lấy zone theo tòa nhà |
+| floors | BuildingId | thường | Lấy tầng theo tòa nhà |
+
+Index cần bổ sung khi các collection sau được implement theo thiết kế target:
+
+| Collection | Field | Loại | Lý do |
+|---|---|---|---|
+| refresh_tokens | Token | unique | Tra cứu / thu hồi token |
+| refresh_tokens | UserId | thường | Lấy token theo user |
+| subscriptions | PlateNumber | thường | Kiểm tra vé tháng lúc check-in |
+| payments | ParkingSessionId | thường | Tra payment theo session |
+| payments | ShiftId | thường | Tổng hợp tiền mặt theo ca |
 
 ## 9. Business Rules
 
