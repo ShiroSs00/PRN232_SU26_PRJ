@@ -276,6 +276,71 @@ Features:
 - Refund payment if needed.
 - View payment history.
 
+### Monthly Subscription
+
+Purpose: manage registered vehicles that park on a monthly plan (for example apartment residents or company staff) so they can enter and exit without paying per turn.
+
+Subscription statuses:
+
+- Active
+- Expired
+- Suspended
+- Cancelled
+
+Features:
+
+- Register a monthly vehicle with plate number, vehicle type, and owner information.
+- Set subscription start date and end date.
+- Renew a subscription.
+- Suspend or cancel a subscription.
+- View subscription list and expiry status.
+- Check whether a plate number has an active subscription during check-in.
+
+Main fields:
+
+- Id
+- PlateNumber
+- VehicleTypeId
+- BuildingId
+- OwnerName
+- OwnerPhone
+- StartDate
+- EndDate
+- MonthlyFee
+- Status
+- IsActive
+
+### Shift Reconciliation
+
+Purpose: let parking staff open and close a work shift and reconcile collected cash at the end of the shift.
+
+Shift statuses:
+
+- Open
+- Closed
+
+Features:
+
+- Open a shift when staff starts working.
+- Record all payments collected during the shift.
+- Close a shift at the end of the working period.
+- Compare expected cash (sum of cash payments in the shift) with the actual counted cash.
+- Record cash difference (over or short) and a note.
+- View shift history and reconciliation reports.
+
+Main fields:
+
+- Id
+- StaffUserId
+- BuildingId
+- OpenedAt
+- ClosedAt
+- ExpectedCashAmount
+- CountedCashAmount
+- DifferenceAmount
+- Status
+- Note
+
 ### Reports
 
 Purpose: provide operational reports for facility managers.
@@ -290,6 +355,8 @@ Reports:
 - Peak hours.
 - Reports by vehicle type.
 - Reports by floor and zone.
+- Shift reconciliation report (expected vs counted cash, differences by staff).
+- Active and expiring monthly subscriptions.
 
 ## 6. Main Business Flows
 
@@ -339,6 +406,67 @@ Duration: 3 hours 15 minutes
 Total fee: 40,000 VND
 Payment: Paid
 Slot B2-C-015 changed to Available
+```
+
+### Monthly Subscription Check-In and Check-Out
+
+1. Staff opens the check-in screen.
+2. Staff enters the plate number.
+3. The system checks whether the plate number has an active monthly subscription.
+4. If an active subscription exists, the system creates a parking session marked as monthly and does not charge a per-turn fee.
+5. If the subscription is expired or suspended, the system warns the staff and falls back to the normal per-turn check-in.
+6. On check-out, a monthly session is closed without creating a payment, unless an overtime or penalty fee applies.
+
+Expected output:
+
+```txt
+Check-in successful (Monthly)
+Plate number: 51A-12345
+Vehicle type: Car
+Subscription: Active until 2026-12-31
+Check-in time: 2026-05-20 08:30
+Status: Active
+Fee: 0 VND (covered by monthly plan)
+```
+
+### Capacity Full Handling
+
+1. Staff enters the plate number and selects vehicle type on the check-in screen.
+2. The system checks the remaining capacity for the matching zone or building.
+3. If no available slot or remaining capacity exists for that vehicle type, the system blocks the check-in.
+4. The system shows a "Parking Full" message and does not create a parking session.
+5. Capacity is measured by available slot count, or by remaining capacity for capacity-based zones such as motorcycle zones.
+
+Expected output:
+
+```txt
+Check-in blocked
+Vehicle type: Motorcycle
+Zone: B1 - Motorcycle Zone
+Status: Parking Full
+Remaining capacity: 0
+```
+
+### Staff Shift Reconciliation
+
+1. Staff logs in and opens a new shift at the start of work.
+2. All payments collected during the shift are linked to the open shift.
+3. At the end of the shift, staff opens the shift close screen.
+4. The system shows the expected cash amount as the sum of cash payments in the shift.
+5. Staff counts the actual cash and enters the counted amount.
+6. The system calculates the difference (over or short) and stores a note if needed.
+7. The shift status becomes `Closed`.
+
+Expected output:
+
+```txt
+Shift closed
+Staff: nguyen.van.a
+Opened: 2026-05-20 07:00
+Closed: 2026-05-20 15:00
+Expected cash: 1,250,000 VND
+Counted cash: 1,240,000 VND
+Difference: -10,000 VND (short)
 ```
 
 ### Facility Manager Dashboard
@@ -458,6 +586,29 @@ POST /payments/{id}/confirm
 POST /payments/{id}/refund
 ```
 
+### Monthly Subscriptions
+
+```http
+GET    /subscriptions
+GET    /subscriptions/{id}
+GET    /subscriptions/active/by-plate/{plateNumber}
+POST   /subscriptions
+PUT    /subscriptions/{id}
+POST   /subscriptions/{id}/renew
+POST   /subscriptions/{id}/suspend
+POST   /subscriptions/{id}/cancel
+```
+
+### Shifts
+
+```http
+GET  /shifts
+GET  /shifts/{id}
+GET  /shifts/current
+POST /shifts/open
+POST /shifts/{id}/close
+```
+
 ### Reports
 
 ```http
@@ -465,6 +616,8 @@ GET /reports/revenue
 GET /reports/vehicle-flow
 GET /reports/occupancy
 GET /reports/peak-hours
+GET /reports/shift-reconciliation
+GET /reports/subscriptions
 ```
 
 ## 8. Database Design
@@ -482,6 +635,8 @@ GET /reports/peak-hours
 - FeePolicies
 - ParkingSessions
 - Payments
+- Subscriptions
+- Shifts
 - AuditLogs
 
 ### Optional Tables
@@ -572,6 +727,8 @@ GET /reports/peak-hours
 - EntryGate
 - ExitGate
 - Status
+- IsMonthly
+- SubscriptionId
 - TotalFee
 - CreatedByUserId
 - CompletedByUserId
@@ -580,10 +737,38 @@ GET /reports/peak-hours
 
 - Id
 - ParkingSessionId
+- ShiftId
 - Amount
 - Method
 - Status
 - PaidAt
+
+#### Subscription
+
+- Id
+- PlateNumber
+- VehicleTypeId
+- BuildingId
+- OwnerName
+- OwnerPhone
+- StartDate
+- EndDate
+- MonthlyFee
+- Status
+- IsActive
+
+#### Shift
+
+- Id
+- StaffUserId
+- BuildingId
+- OpenedAt
+- ClosedAt
+- ExpectedCashAmount
+- CountedCashAmount
+- DifferenceAmount
+- Status
+- Note
 
 ## 9. Business Rules
 
@@ -595,6 +780,13 @@ GET /reports/peak-hours
 - Parking fee is calculated from vehicle type, fee policy, check-in time, check-out time, lost ticket fee, and overtime fee.
 - A vehicle check-out is only completed after payment is confirmed.
 - Management data such as buildings, vehicle types, floors, zones, and slots should use soft delete with `IsActive = false`.
+- During check-in, the system must check whether the plate number has an active monthly subscription. If found, the session is marked as monthly and no per-turn fee is charged.
+- A monthly subscription is valid only when its status is `Active` and the current date is between `StartDate` and `EndDate`. An expired or suspended subscription falls back to normal per-turn handling.
+- A monthly session is closed on check-out without creating a payment, unless an overtime or penalty fee applies.
+- Check-in must be blocked when there is no available slot or no remaining capacity for the matching vehicle type, and the system shows a "Parking Full" message. Capacity is measured by available slot count, or by remaining capacity for capacity-based zones.
+- All cash payments must be linked to the staff member's currently open shift.
+- A staff member can have only one open shift at a time. A new shift cannot be opened until the previous one is closed.
+- On shift close, the system records the difference between expected cash (sum of cash payments in the shift) and the actual counted cash. A note is required when a difference exists.
 
 ## 10. Suggested Screens
 
@@ -620,6 +812,8 @@ GET /reports/peak-hours
 - Parking Slots
 - Fee Policies
 - Users
+- Monthly Subscriptions
+- Shift Reconciliation Report
 
 ### Staff Pages
 
@@ -628,6 +822,7 @@ GET /reports/peak-hours
 - Active Sessions
 - Session Detail
 - Exception Handling
+- Open/Close Shift
 
 ## 11. Development Priority
 
@@ -645,6 +840,7 @@ GET /reports/peak-hours
 - Check-out
 - Fee calculation
 - Payment confirmation
+- Capacity full check on check-in
 - Dashboard overview
 
 ### Priority 2
@@ -654,6 +850,8 @@ GET /reports/peak-hours
 - User management
 - Audit log
 - Search, filter, and pagination
+- Monthly subscription management
+- Shift reconciliation
 
 ### Priority 3
 
