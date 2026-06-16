@@ -48,12 +48,13 @@
    └──────┬───────┴───────┬───┴─────────────┘
           │               │
           ▼               ▼
-   ┌──────────────┐  ┌──────────────┐
-   │   MongoDB    │  │   MongoDB    │
-   │   :27017     │  │   :27018     │
-   │  auth_db     │  │ parking_db   │
-   │ payment_db   │  │ report_db    │
-   └──────────────┘  └──────────────┘
+   ┌────────────────────────────────┐
+   │      MongoDB Atlas (Cloud)         │
+   │  - parking_auth_db                 │
+   │  - parking_main_db                 │
+   │  - parking_payment_db              │
+   │  - parking_report_db               │
+   └────────────────────────────────┘
 ```
 
 ---
@@ -61,7 +62,7 @@
 ## 📦 Phân Chia Services
 
 ### 1. Auth Service (Port 5001)
-**Database:** `auth_db`
+**Database:** `parking_auth_db`
 
 **Chức năng:**
 - User authentication (login/logout)
@@ -84,15 +85,14 @@ POST /api/v1/roles
 ```
 
 **Collections:**
-- Users (Id, FullName, Email, PasswordHash, PhoneNumber, IsActive, CreatedAt)
-- Roles (Id, Name, Description, Permissions)
-- UserRoles (UserId, RoleId)
-- RefreshTokens (Id, UserId, Token, ExpiresAt)
+- Users (Id, FullName, Email, PasswordHash, PhoneNumber, Roles[], IsActive, CreatedAt)
+- Roles (Id, Name, Description, Permissions[])
+- RefreshTokens (Id, UserId, Token, ExpiresAt, IsRevoked)
 
 ---
 
 ### 2. Parking Service (Port 5002)
-**Database:** `parking_db`
+**Database:** `parking_main_db`
 
 **Chức năng:**
 - Building, floor, zone management
@@ -142,7 +142,7 @@ POST /api/v1/shifts/{id}/close
 ---
 
 ### 3. Payment Service (Port 5003)
-**Database:** `payment_db`
+**Database:** `parking_payment_db`
 
 **Chức năng:**
 - Fee policy management
@@ -176,7 +176,7 @@ POST /api/v1/subscriptions/{id}/renew
 ---
 
 ### 4. Report Service (Port 5004)
-**Database:** `report_db` (hoặc read từ các DB khác)
+**Database:** `parking_report_db` (hoặc read từ các DB khác)
 
 **Chức năng:**
 - Revenue reports
@@ -371,9 +371,7 @@ npm run dev
 ## ❓ FAQ
 
 **Q: Có cần database riêng cho mỗi service không?**
-A: Có 2 options:
-- **Option A (Khuyến nghị)**: Mỗi service 1 database riêng trong MongoDB (auth_db, parking_db, payment_db)
-- **Option B (Đơn giản hơn)**: 1 MongoDB instance, nhiều databases/collections
+A: Có. Mỗi service dùng 1 database riêng trên cùng một MongoDB Atlas cluster: `parking_auth_db`, `parking_main_db`, `parking_payment_db`, `parking_report_db`. Cách này đúng tinh thần microservices (isolation, scale độc lập) mà vẫn chỉ cần 1 cluster Atlas free.
 
 **Q: Services gọi nhau như thế nào?**
 A: Dùng HTTP REST với `HttpClient`. Ví dụ Parking Service cần user info → gọi Auth Service qua `http://localhost:5001/api/v1/users/{id}`
