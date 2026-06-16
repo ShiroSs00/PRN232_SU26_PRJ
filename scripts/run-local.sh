@@ -9,13 +9,9 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Start databases
-echo -e "${BLUE}📦 Starting databases...${NC}"
-docker-compose up -d mongodb postgres redis
-
-# Wait for databases to be ready
-echo "⏳ Waiting for databases to be ready..."
-sleep 10
+# MongoDB dùng Atlas (cloud) nên không cần start database local.
+# Nếu muốn dùng MongoDB local qua Docker, bỏ comment dòng dưới:
+# docker-compose up -d mongodb
 
 # Start services in separate terminals (Windows)
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then

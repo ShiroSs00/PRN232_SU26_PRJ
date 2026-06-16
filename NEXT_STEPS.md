@@ -232,7 +232,6 @@ src/Services/ReportService/
 **Cách lấy data:**
 - Query từ các database của services khác (read-only)
 - Hoặc dùng read replica
-- Cache kết quả với Redis (optional)
 
 ---
 
@@ -360,7 +359,6 @@ public class PaymentServiceClient
 - MongoDB Compass
 - Docker Desktop
 - Postman/Insomnia (API testing)
-- Redis (optional, cho caching)
 
 # VS Code extensions
 - C# Dev Kit
