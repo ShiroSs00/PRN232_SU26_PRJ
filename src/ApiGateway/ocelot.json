@@ -10,9 +10,24 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/auth/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
-      "RouteClaimsRequirement": {},
-      "Key": "auth-service"
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "Key": "auth-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/users/{everything}",
@@ -24,11 +39,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/users/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "user-service"
+      "Key": "user-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/buildings/{everything}",
@@ -40,11 +71,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/buildings/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "buildings-service"
+      "Key": "buildings-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/vehicle-types/{everything}",
@@ -56,11 +103,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/vehicle-types/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "vehicle-types-service"
+      "Key": "vehicle-types-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/floors/{everything}",
@@ -72,11 +135,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/floors/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "floors-service"
+      "Key": "floors-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/zones/{everything}",
@@ -88,11 +167,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/zones/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "zones-service"
+      "Key": "zones-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/parking-slots/{everything}",
@@ -104,11 +199,28 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/parking-slots/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "PATCH" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "parking-slots-service"
+      "Key": "parking-slots-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/parking-sessions/{everything}",
@@ -120,11 +232,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/parking-sessions/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "parking-sessions-service"
+      "Key": "parking-sessions-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/shifts/{everything}",
@@ -136,11 +264,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/shifts/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "shifts-service"
+      "Key": "shifts-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/fee-policies/{everything}",
@@ -152,11 +296,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/fee-policies/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "fee-policies-service"
+      "Key": "fee-policies-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/payments/{everything}",
@@ -168,18 +328,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/payments/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
+      "Key": "payments-service",
       "RateLimitOptions": {
         "ClientWhitelist": [],
         "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
         "Period": "1m",
         "PeriodTimespan": 60,
-        "Limit": 100
-      },
-      "Key": "payments-service"
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/subscriptions/{everything}",
@@ -191,11 +360,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/subscriptions/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "subscriptions-service"
+      "Key": "subscriptions-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     },
     {
       "DownstreamPathTemplate": "/api/v1/reports/{everything}",
@@ -207,19 +392,27 @@
         }
       ],
       "UpstreamPathTemplate": "/api/v1/reports/{everything}",
-      "UpstreamHttpMethod": [ "GET" ],
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer"
       },
-      "Key": "reports-service"
+      "Key": "reports-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
     }
   ],
   "GlobalConfiguration": {
-    "BaseUrl": "http://localhost:5000",
-    "RateLimitOptions": {
-      "DisableRateLimitHeaders": false,
-      "QuotaExceededMessage": "Too many requests. Please try again later.",
-      "HttpStatusCode": 429
-    }
+    "BaseUrl": "http://localhost:5000"
   }
 }

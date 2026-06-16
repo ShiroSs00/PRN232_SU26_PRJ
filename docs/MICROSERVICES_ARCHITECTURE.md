@@ -86,9 +86,11 @@ POST   /api/v1/roles
 ```
 
 **Database Collections (parking_auth_db):**
-- users (Roles nhúng trực tiếp dạng string[])
-- roles (định nghĩa Permissions cho từng role)
+- users
+- roles
 - refresh_tokens
+- audit_logs
+- notifications
 
 **Dependencies:**
 - MongoDB.Driver
@@ -168,9 +170,17 @@ POST   /api/v1/shifts/{id}/close
 - floors
 - zones
 - vehicle_types
+- vehicles
 - parking_slots
+- gates
 - parking_sessions
+- parking_session_logs
 - shifts
+- incident_reports
+- reservations
+- feedbacks
+- audit_logs
+- notifications
 
 **Inter-service Communication:**
 - Gọi Payment Service để calculate fee khi check-out
@@ -224,7 +234,11 @@ POST   /api/v1/subscriptions/{id}/cancel
 **Database Collections (parking_payment_db):**
 - fee_policies
 - payments
+- payment_transactions
 - subscriptions
+- subscription_payments
+- audit_logs
+- notifications
 
 **Inter-service Communication:**
 - Gọi Parking Service để get parking session details
@@ -254,8 +268,10 @@ GET /api/v1/reports/export/revenue (Excel/PDF)
 ```
 
 **Database Collections (parking_report_db):**
-- Chủ yếu READ từ các services khác
-- Có thể cache aggregated data
+- audit_logs
+- notifications
+
+Report models are generated/read models. Report Service can aggregate through service clients or cache summaries later.
 
 **Inter-service Communication:**
 - Read data từ tất cả services để tạo reports
