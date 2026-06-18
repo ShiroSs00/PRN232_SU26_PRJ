@@ -352,6 +352,22 @@
       }
     },
     {
+      "DownstreamPathTemplate": "/api/v1/payments/webhook/payos",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5003
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/payments/webhook/payos",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ],
+      "Key": "payos-webhook"
+    },
+    {
       "DownstreamPathTemplate": "/api/v1/payments/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [

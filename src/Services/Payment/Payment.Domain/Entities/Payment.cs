@@ -1,3 +1,4 @@
+using MongoDB.Bson.Serialization.Attributes;
 using Payment.Domain.Enums;
 using Shared.Common.Entities;
 
@@ -24,6 +25,16 @@ public class Payment : BaseEntity
     public PaymentMethod Method { get; set; } = PaymentMethod.Cash;
 
     public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
+
+    /// <summary>PayOS orderCode (Int64) — set when a PayOS payment link is created.</summary>
+    [BsonIgnoreIfNull]
+    public long? OrderCode { get; set; }
+
+    /// <summary>PayOS paymentLinkId returned from /v2/payment-requests.</summary>
+    public string? PaymentLinkId { get; set; }
+
+    /// <summary>PayOS hosted checkout URL.</summary>
+    public string? CheckoutUrl { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
