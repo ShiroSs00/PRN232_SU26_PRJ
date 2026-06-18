@@ -44,4 +44,7 @@ public static class AuthErrorCodes
     public const string AccountInactive = "ACCOUNT_INACTIVE";
     public const string InvalidCurrentPassword = "INVALID_CURRENT_PASSWORD";
     public const string InvalidRefreshToken = "INVALID_REFRESH_TOKEN";
+    public const string InvalidRole = "INVALID_ROLE";
+    public const string DuplicateRole = "DUPLICATE_ROLE";
+    public const string ValidationFailed = "VALIDATION_FAILED";
 }
