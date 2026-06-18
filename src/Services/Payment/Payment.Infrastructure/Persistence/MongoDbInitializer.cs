@@ -49,7 +49,15 @@ public class MongoDbInitializer
                 new CreateIndexOptions { Name = "ix_payments_vehicle_created_at" }),
             new CreateIndexModel<Payment.Domain.Entities.Payment>(
                 Builders<Payment.Domain.Entities.Payment>.IndexKeys.Ascending(x => x.Status).Descending(x => x.CreatedAt),
-                new CreateIndexOptions { Name = "ix_payments_status_created_at" })
+                new CreateIndexOptions { Name = "ix_payments_status_created_at" }),
+            new CreateIndexModel<Payment.Domain.Entities.Payment>(
+                Builders<Payment.Domain.Entities.Payment>.IndexKeys.Ascending(x => x.OrderCode),
+                new CreateIndexOptions
+                {
+                    Name = "ux_payments_order_code",
+                    Unique = true,
+                    Sparse = true
+                })
         });
 
         await _context.PaymentTransactions.Indexes.CreateManyAsync(new[]
