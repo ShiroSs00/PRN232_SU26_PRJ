@@ -198,6 +198,17 @@ public class PayOsService : IPayOsService
             return Result.Ok();
         }
 
+        // Defense-in-depth: the webhook is signature-verified, but still confirm the
+        // amount paid matches the stored payment amount before flipping to Paid.
+        var expectedAmount = (long)Math.Round(payment.Amount, MidpointRounding.AwayFromZero);
+        if (verified.Amount != expectedAmount)
+        {
+            _logger.LogWarning(
+                "PayOS webhook: amount mismatch for payment {PaymentId} (expected {Expected}, got {Actual}); not flipping to Paid",
+                payment.Id, expectedAmount, verified.Amount);
+            return Result.Ok();
+        }
+
         var now = DateTime.UtcNow;
         var update = Builders<Domain.Entities.Payment>.Update
             .Set(x => x.Status, PaymentStatus.Paid)
@@ -242,11 +253,13 @@ public class PayOsService : IPayOsService
 
     private static long GenerateOrderCode()
     {
-        // PayOS orderCode must fit Int64 and be unique per merchant; using unix-seconds-based
-        // value with a small random suffix is collision-safe for this workload.
-        var seconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var suffix = Random.Shared.Next(100, 1000);
-        return seconds * 1000 + suffix;
+        // PayOS orderCode must fit Int64 and be unique per merchant.
+        // Unix milliseconds is monotonic enough for this workload and avoids the
+        // same-second collision risk of a random suffix; a small random tail adds
+        // safety if two requests land on the same millisecond.
+        var millis = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var suffix = Random.Shared.Next(0, 1000);
+        return millis * 1000 + suffix;
     }
 
     private static string BuildDescription(Domain.Entities.Payment payment)
