@@ -104,7 +104,7 @@ The MVP should focus on features that make the product demoable from setup to ve
 - Realtime slot updates
 - Real payment gateway
 - Mobile app
-- AI slot suggestion
+- ML-based slot suggestion (the rule-based Smart Slot Allocation is designed in section 5; a trained model is a later upgrade)
 - Export Excel/PDF
 
 ## 5. Product Modules
@@ -127,6 +127,39 @@ Roles:
 - FacilityManager
 - ParkingStaff
 - Driver
+
+### System Configuration
+
+Purpose: let the System Administrator manage system-wide settings without changing code, fulfilling the "manage system configuration" responsibility of the Admin role.
+
+Features:
+
+- Create or update a configuration entry (key-value).
+- View all configuration entries.
+- View a single entry by key.
+- Group entries by category (for example: general, parking, payment, notification).
+- Enable or disable a configuration entry.
+
+Examples of configuration keys:
+
+- `parking.overtime_grace_minutes` - grace period before overtime fee applies.
+- `parking.default_currency` - currency used for fees and payments.
+- `payment.allowed_methods` - enabled payment methods.
+- `general.system_name` - display name of the system.
+
+Main fields:
+
+- Id
+- Key (unique)
+- Value
+- ValueType (string, number, boolean, json)
+- Category
+- Description
+- IsActive
+- UpdatedByUserId
+- UpdatedAt
+
+This module belongs to the Auth Service (the same service that owns users and roles), stored in `parking_auth_db` collection `system_configurations`. Only the Admin role can write; other services read configuration values they need through the Auth Service API or a shared cache.
 
 ### Building Management
 
@@ -206,6 +239,30 @@ Features:
 - Update slot status.
 - Filter slots by building, floor, zone, vehicle type, and status.
 - View available and occupied slot counts.
+
+### Smart Slot Allocation (AI Assist)
+
+Purpose: optimize parking slot allocation by vehicle type so that drivers spend less time finding a spot and the parking lot is used more evenly. This is the AI-assist feature encouraged by the project brief.
+
+How it works (heuristic scoring, no external ML service required):
+
+When a vehicle checks in, the system does not pick the first free slot blindly. Instead it scores every candidate `Available` slot that matches the vehicle type, and recommends the highest-scoring one. The score combines several factors:
+
+- Distance from the entry gate to the slot (closer is better, reduces search time).
+- Zone balancing (prefer zones with lower current occupancy so the lot fills evenly and avoids congestion in one area).
+- Vehicle type match (a slot in a zone dedicated to the vehicle type is preferred over a mixed zone).
+- Proximity to the exit for short-stay patterns (optional, configurable weight).
+
+The weights of each factor are read from System Configuration (for example `parking.allocation.weight_distance`), so the behavior can be tuned without code changes.
+
+Features:
+
+- Suggest the best slot for an incoming vehicle by vehicle type and entry gate.
+- Return a ranked list of candidate slots with scores (so staff can override).
+- Recalculate suggestion if the suggested slot is taken in the meantime.
+- Fall back to the nearest available slot if scoring data is incomplete.
+
+Scope note: the MVP can ship a rule-based scoring version. A future phase may replace the scorer with a trained model (for example predicting peak-hour demand per zone) behind the same endpoint, without changing the API contract.
 
 ### Parking Session
 
@@ -507,6 +564,29 @@ Base URL:
 POST /auth/login
 POST /auth/logout
 GET  /auth/me
+POST /auth/refresh-token
+```
+
+### Users and Roles
+
+```http
+GET    /users
+GET    /users/{id}
+POST   /users
+PUT    /users/{id}
+DELETE /users/{id}
+GET    /roles
+POST   /roles
+```
+
+### System Configuration
+
+```http
+GET    /system-configurations
+GET    /system-configurations/{key}
+POST   /system-configurations
+PUT    /system-configurations/{key}
+PATCH  /system-configurations/{key}/status
 ```
 
 ### Buildings
@@ -552,7 +632,10 @@ POST   /parking-slots
 PUT    /parking-slots/{id}
 PATCH  /parking-slots/{id}/status
 DELETE /parking-slots/{id}
+GET    /parking-slots/suggest
 ```
+
+The `GET /parking-slots/suggest` endpoint powers Smart Slot Allocation. It takes `vehicleTypeId`, `buildingId`, and an optional `entryGate`, then returns a ranked list of recommended `Available` slots with their scores. Staff can accept the top suggestion or override it during check-in.
 
 ### Parking Sessions
 
@@ -648,6 +731,7 @@ The application uses database-per-service:
 - `users`
 - `roles`
 - `refresh_tokens`
+- `system_configurations`
 - `audit_logs`
 - `notifications`
 
@@ -693,6 +777,7 @@ Report models such as `DashboardSummary`, `RevenueReport`, `OccupancyReport`, `V
 - `User`: Id, FullName, Username, Email, PasswordHash, PhoneNumber, AvatarUrl, LastLoginAt, Roles, IsActive, CreatedAt, UpdatedAt
 - `Role`: Id, Name, Description, Permissions, IsActive, CreatedAt, UpdatedAt
 - `RefreshToken`: Id, UserId, Token, ExpiresAt, CreatedAt, IsRevoked
+- `SystemConfiguration`: Id, Key, Value, ValueType, Category, Description, IsActive, UpdatedByUserId, UpdatedAt
 
 #### Parking
 
@@ -739,6 +824,7 @@ Indexes are created by the startup `MongoDbInitializer` classes.
 | auth | users | Email | unique | Login and duplicate email protection |
 | auth | roles | Name | unique | Role name uniqueness |
 | auth | refresh_tokens | Token | unique | Token lookup/revocation |
+| auth | system_configurations | Key | unique | Configuration lookup by key |
 | parking | vehicle_types | Name | unique | Vehicle type uniqueness |
 | parking | vehicles | PlateNumberNormalized | unique | Vehicle lookup and duplicate plate protection |
 | parking | parking_slots | Code | unique | Slot code uniqueness |

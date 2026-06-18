@@ -105,6 +105,7 @@ POST   /api/v1/roles
 - Building, floor, zone management
 - Vehicle type management
 - Parking slot management
+- Smart slot allocation (gợi ý slot tối ưu theo loại xe + cổng vào)
 - Parking session (check-in/check-out)
 - Shift management
 - Capacity checking
@@ -142,6 +143,7 @@ DELETE /api/v1/zones/{id}
 GET    /api/v1/parking-slots
 GET    /api/v1/parking-slots/{id}
 GET    /api/v1/parking-slots/available
+GET    /api/v1/parking-slots/suggest
 POST   /api/v1/parking-slots
 PUT    /api/v1/parking-slots/{id}
 PATCH  /api/v1/parking-slots/{id}/status
