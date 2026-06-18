@@ -62,6 +62,39 @@
       }
     },
     {
+      "DownstreamPathTemplate": "/api/v1/system-configurations/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5001
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/system-configurations/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "system-configuration-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
       "DownstreamPathTemplate": "/api/v1/buildings/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
