@@ -46,10 +46,6 @@ CodeCoverage/
 .vs/
 *.csproj.user
 appsettings.Local.json
-# Service appsettings chứa connection string Atlas thật - không push lên GitHub
-# (gửi file trực tiếp cho người cần). Cấu trúc config xem trong code/docs.
-src/Services/**/appsettings.json
-src/ApiGateway/appsettings.json
 .verify-build/
 
 # MSBuild Binary and Structured Log
