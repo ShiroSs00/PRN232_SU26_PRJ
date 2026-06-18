@@ -1,4 +1,6 @@
+using Auth.Application.Abstractions;
 using Auth.Domain.Entities;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using Shared.Common.Entities;
 
@@ -6,11 +8,22 @@ namespace Auth.Infrastructure.Persistence;
 
 public class MongoDbInitializer
 {
-    private readonly MongoDbContext _context;
+    public const string AdminRole = "Admin";
+    public const string FacilityManagerRole = "FacilityManager";
+    public const string ParkingStaffRole = "ParkingStaff";
+    public const string DriverRole = "Driver";
 
-    public MongoDbInitializer(MongoDbContext context)
+    public const string DefaultAdminUsername = "admin";
+    public const string DefaultAdminEmail = "admin@parking.local";
+    public const string DefaultAdminPassword = "Admin@123";
+
+    private readonly MongoDbContext _context;
+    private readonly IPasswordHasher _hasher;
+
+    public MongoDbInitializer(MongoDbContext context, IPasswordHasher hasher)
     {
         _context = context;
+        _hasher = hasher;
     }
 
     public async Task InitializeAsync()
@@ -19,6 +32,8 @@ public class MongoDbInitializer
         await CreateRoleIndexesAsync();
         await CreateRefreshTokenIndexesAsync();
         await CreateSharedIndexesAsync();
+        await SeedRolesAsync();
+        await SeedAdminUserAsync();
     }
 
     private async Task CreateUserIndexesAsync()
@@ -87,5 +102,71 @@ public class MongoDbInitializer
                 Builders<Notification>.IndexKeys.Ascending(x => x.UserId).Ascending(x => x.IsRead),
                 new CreateIndexOptions { Name = "ix_notifications_user_unread" })
         });
+    }
+
+    private async Task SeedRolesAsync()
+    {
+        var defaults = new (string Name, string Description)[]
+        {
+            (AdminRole, "Full system administrator."),
+            (FacilityManagerRole, "Manages parking facilities and staff."),
+            (ParkingStaffRole, "Operates check-in/check-out at the gate."),
+            (DriverRole, "End-user driver who parks vehicles.")
+        };
+
+        foreach (var (name, description) in defaults)
+        {
+            var existing = await _context.Roles.Find(r => r.Name == name).FirstOrDefaultAsync();
+            if (existing is not null) continue;
+
+            var role = new Role
+            {
+                Id = ObjectId.GenerateNewId().ToString(),
+                Name = name,
+                Description = description,
+                Permissions = new List<string>(),
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            try
+            {
+                await _context.Roles.InsertOneAsync(role);
+            }
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                // Another instance got there first — fine.
+            }
+        }
+    }
+
+    private async Task SeedAdminUserAsync()
+    {
+        var existing = await _context.Users
+            .Find(u => u.Username == DefaultAdminUsername || u.Email == DefaultAdminEmail)
+            .FirstOrDefaultAsync();
+
+        if (existing is not null) return;
+
+        var admin = new User
+        {
+            Id = ObjectId.GenerateNewId().ToString(),
+            FullName = "System Administrator",
+            Username = DefaultAdminUsername,
+            Email = DefaultAdminEmail,
+            PasswordHash = _hasher.Hash(DefaultAdminPassword),
+            Roles = new List<string> { AdminRole },
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        try
+        {
+            await _context.Users.InsertOneAsync(admin);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // Race with another startup — admin already exists.
+        }
     }
 }
