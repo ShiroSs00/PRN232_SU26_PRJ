@@ -73,8 +73,8 @@ public class MongoDbInitializer
         var motorcycle = await GetOrCreateVehicleTypeAsync("Motorcycle", "Motorcycle parking type");
         var car = await GetOrCreateVehicleTypeAsync("Car", "Car parking type");
 
-        var floorB1 = await GetOrCreateFloorAsync(building.Id, "B1", "B1");
-        var floorB2 = await GetOrCreateFloorAsync(building.Id, "B2", "B2");
+        var floorB1 = await GetOrCreateFloorAsync(building.Id, "B1", "B1", 4, 6);
+        var floorB2 = await GetOrCreateFloorAsync(building.Id, "B2", "B2", 4, 6);
 
         var motorcycleZone = await GetOrCreateZoneAsync(
             building.Id,
@@ -238,7 +238,7 @@ public class MongoDbInitializer
         return vehicleType;
     }
 
-    private async Task<Floor> GetOrCreateFloorAsync(string buildingId, string floorNumber, string name)
+    private async Task<Floor> GetOrCreateFloorAsync(string buildingId, string floorNumber, string name, int gridRows, int gridCols)
     {
         var floor = await _context.Floors
             .Find(item => item.BuildingId == buildingId && item.FloorNumber == floorNumber)
@@ -246,6 +246,13 @@ public class MongoDbInitializer
 
         if (floor is not null)
         {
+            if (floor.GridRows == 0 || floor.GridCols == 0)
+            {
+                floor.GridRows = gridRows;
+                floor.GridCols = gridCols;
+                floor.UpdatedAt = DateTime.UtcNow;
+                await _context.Floors.ReplaceOneAsync(f => f.Id == floor.Id, floor);
+            }
             return floor;
         }
 
@@ -255,6 +262,8 @@ public class MongoDbInitializer
             BuildingId = buildingId,
             FloorNumber = floorNumber,
             Name = name,
+            GridRows = gridRows,
+            GridCols = gridCols,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -329,9 +338,12 @@ public class MongoDbInitializer
                     ZoneId = zoneId,
                     VehicleTypeId = vehicleTypeId,
                     Code = $"{prefix}-{index:000}",
+                    Label = $"{prefix}-{index:000}",
                     Status = ParkingSlotStatuses.Available,
                     Row = row,
                     Column = col,
+                    RowSpan = 1,
+                    ColSpan = 1,
                     PositionX = 50.0 + (col - 1) * width,
                     PositionY = 50.0 + (row - 1) * height,
                     Width = width,

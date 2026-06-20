@@ -20,6 +20,12 @@ public class Floor
     [BsonElement("name")]
     public string Name { get; set; } = string.Empty;
 
+    [BsonElement("gridRows")]
+    public int GridRows { get; set; }
+
+    [BsonElement("gridCols")]
+    public int GridCols { get; set; }
+
     [BsonElement("isActive")]
     public bool IsActive { get; set; } = true;
 

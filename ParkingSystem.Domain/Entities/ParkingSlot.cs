@@ -39,6 +39,15 @@ public class ParkingSlot
     [BsonElement("column")]
     public int Column { get; set; }
 
+    [BsonElement("rowSpan")]
+    public int RowSpan { get; set; } = 1;
+
+    [BsonElement("colSpan")]
+    public int ColSpan { get; set; } = 1;
+
+    [BsonElement("label")]
+    public string? Label { get; set; }
+
     [BsonElement("positionX")]
     public double PositionX { get; set; }
 
