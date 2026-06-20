@@ -33,6 +33,24 @@ public class ParkingSlot
     [BsonElement("status")]
     public string Status { get; set; } = ParkingSlotStatuses.Available;
 
+    [BsonElement("row")]
+    public int Row { get; set; }
+
+    [BsonElement("column")]
+    public int Column { get; set; }
+
+    [BsonElement("positionX")]
+    public double PositionX { get; set; }
+
+    [BsonElement("positionY")]
+    public double PositionY { get; set; }
+
+    [BsonElement("width")]
+    public double Width { get; set; }
+
+    [BsonElement("height")]
+    public double Height { get; set; }
+
     [BsonElement("isActive")]
     public bool IsActive { get; set; } = true;
 

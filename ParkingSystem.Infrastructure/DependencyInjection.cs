@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IParkingSlotService, ParkingSlotService>();
 
         // Configure JWT Authentication
         var secret = configuration["JwtSettings:Secret"] ?? "SuperSecretKeyForParkingManager1234567890!";

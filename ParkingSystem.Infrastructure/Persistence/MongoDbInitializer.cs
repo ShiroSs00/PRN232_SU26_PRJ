@@ -313,17 +313,30 @@ public class MongoDbInitializer
 
         var now = DateTime.UtcNow;
         var slots = Enumerable.Range(1, count)
-            .Select(index => new ParkingSlot
-            {
-                Id = ObjectId.GenerateNewId().ToString(),
-                BuildingId = buildingId,
-                FloorId = floorId,
-                ZoneId = zoneId,
-                VehicleTypeId = vehicleTypeId,
-                Code = $"{prefix}-{index:000}",
-                Status = ParkingSlotStatuses.Available,
-                IsActive = true,
-                CreatedAt = now
+            .Select(index => {
+                var isCar = prefix.Contains("-C");
+                var width = isCar ? 100.0 : 60.0;
+                var height = isCar ? 160.0 : 100.0;
+                var gap = isCar ? 130.0 : 80.0;
+                
+                return new ParkingSlot
+                {
+                    Id = ObjectId.GenerateNewId().ToString(),
+                    BuildingId = buildingId,
+                    FloorId = floorId,
+                    ZoneId = zoneId,
+                    VehicleTypeId = vehicleTypeId,
+                    Code = $"{prefix}-{index:000}",
+                    Status = ParkingSlotStatuses.Available,
+                    Row = 1,
+                    Column = index,
+                    PositionX = 50.0 + (index - 1) * gap,
+                    PositionY = isCar ? 300.0 : 100.0,
+                    Width = width,
+                    Height = height,
+                    IsActive = true,
+                    CreatedAt = now
+                };
             })
             .ToList();
 
