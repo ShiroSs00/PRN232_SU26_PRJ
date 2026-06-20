@@ -34,6 +34,8 @@ public static class DependencyInjection
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IParkingSlotService, ParkingSlotService>();
+        services.AddScoped<IParkingSessionService, ParkingSessionService>();
+        services.AddScoped<IPaymentService, PaymentService>();
 
         // Configure JWT Authentication
         var secret = configuration["JwtSettings:Secret"] ?? "SuperSecretKeyForParkingManager1234567890!";

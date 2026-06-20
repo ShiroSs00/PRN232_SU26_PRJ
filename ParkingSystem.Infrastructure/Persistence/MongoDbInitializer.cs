@@ -81,17 +81,17 @@ public class MongoDbInitializer
             floorB1.Id,
             motorcycle.Id,
             "B1-Motorcycle-Zone",
-            5);
+            24);
 
         var carZone = await GetOrCreateZoneAsync(
             building.Id,
             floorB2.Id,
             car.Id,
             "B2-Car-Zone",
-            5);
+            24);
 
-        await SeedParkingSlotsAsync(building.Id, floorB1.Id, motorcycleZone.Id, motorcycle.Id, "B1-M", 5);
-        await SeedParkingSlotsAsync(building.Id, floorB2.Id, carZone.Id, car.Id, "B2-C", 5);
+        await SeedParkingSlotsAsync(building.Id, floorB1.Id, motorcycleZone.Id, motorcycle.Id, "B1-M", 24);
+        await SeedParkingSlotsAsync(building.Id, floorB2.Id, carZone.Id, car.Id, "B2-C", 24);
         await SeedFeePolicyAsync(motorcycle.Id, "Motorcycle Hourly", 5000m, 3000m);
         await SeedFeePolicyAsync(car.Id, "Car Hourly", 20000m, 10000m);
         await SeedUsersAsync();
@@ -315,9 +315,11 @@ public class MongoDbInitializer
         var slots = Enumerable.Range(1, count)
             .Select(index => {
                 var isCar = prefix.Contains("-C");
-                var width = isCar ? 100.0 : 60.0;
-                var height = isCar ? 160.0 : 100.0;
-                var gap = isCar ? 130.0 : 80.0;
+                var width = isCar ? 120.0 : 80.0;
+                var height = isCar ? 180.0 : 100.0;
+                var colsPerRow = 6;
+                var row = (index - 1) / colsPerRow + 1;
+                var col = (index - 1) % colsPerRow + 1;
                 
                 return new ParkingSlot
                 {
@@ -328,10 +330,10 @@ public class MongoDbInitializer
                     VehicleTypeId = vehicleTypeId,
                     Code = $"{prefix}-{index:000}",
                     Status = ParkingSlotStatuses.Available,
-                    Row = 1,
-                    Column = index,
-                    PositionX = 50.0 + (index - 1) * gap,
-                    PositionY = isCar ? 300.0 : 100.0,
+                    Row = row,
+                    Column = col,
+                    PositionX = 50.0 + (col - 1) * width,
+                    PositionY = 50.0 + (row - 1) * height,
                     Width = width,
                     Height = height,
                     IsActive = true,
