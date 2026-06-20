@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IParkingSessionService, ParkingSessionService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IParkingMapNotifier, SignalRParkingMapNotifier>();
+        services.AddScoped<IParkingMapService, ParkingMapService>();
         services.AddSignalR();
 
         // Configure JWT Authentication
