@@ -55,6 +55,7 @@ namespace ParkingSystem.API
             app.UseAuthorization();
 
             app.MapControllers();
+            app.MapHub<ParkingSystem.API.Hubs.ParkingMapHub>("/hubs/parking-map");
 
             app.Run();
         }
