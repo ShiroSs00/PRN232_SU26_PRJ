@@ -11,11 +11,13 @@ public class ParkingSessionService : IParkingSessionService
 {
     private readonly MongoDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IParkingMapNotifier _mapNotifier;
 
-    public ParkingSessionService(MongoDbContext context, ICurrentUserService currentUserService)
+    public ParkingSessionService(MongoDbContext context, ICurrentUserService currentUserService, IParkingMapNotifier mapNotifier)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _mapNotifier = mapNotifier;
     }
 
     public async Task<IEnumerable<ParkingSessionDto>> GetAllAsync(string? status = null, string? plateNumber = null)
@@ -148,6 +150,22 @@ public class ParkingSessionService : IParkingSessionService
 
         await _context.ParkingSessions.InsertOneAsync(session);
 
+        // Notify realtime map
+        await _mapNotifier.NotifySlotChangedAsync(slot.FloorId, new SlotStatusChangedEvent
+        {
+            FloorId = slot.FloorId,
+            SlotId = slot.Id,
+            Status = ParkingSlotStatuses.Occupied,
+            Vehicle = new OccupyingVehicleDto
+            {
+                SessionId = session.Id,
+                PlateNumber = session.PlateNumber,
+                CheckInTime = session.CheckInTime,
+                IsMonthly = false
+            },
+            OccurredAt = DateTime.UtcNow
+        });
+
         var createdByUser = !string.IsNullOrEmpty(currentUserId) 
             ? await _context.Users.Find(u => u.Id == currentUserId).FirstOrDefaultAsync() 
             : null;
@@ -260,6 +278,16 @@ public class ParkingSessionService : IParkingSessionService
                 slot.Status = ParkingSlotStatuses.Available;
                 slot.UpdatedAt = DateTime.UtcNow;
                 await _context.ParkingSlots.ReplaceOneAsync(s => s.Id == slot.Id, slot);
+
+                // Notify realtime map
+                await _mapNotifier.NotifySlotChangedAsync(slot.FloorId, new SlotStatusChangedEvent
+                {
+                    FloorId = slot.FloorId,
+                    SlotId = slot.Id,
+                    Status = ParkingSlotStatuses.Available,
+                    Vehicle = null,
+                    OccurredAt = DateTime.UtcNow
+                });
             }
         }
 
@@ -314,6 +342,16 @@ public class ParkingSessionService : IParkingSessionService
             slot.Status = ParkingSlotStatuses.Available;
             slot.UpdatedAt = DateTime.UtcNow;
             await _context.ParkingSlots.ReplaceOneAsync(s => s.Id == slot.Id, slot);
+
+            // Notify realtime map
+            await _mapNotifier.NotifySlotChangedAsync(slot.FloorId, new SlotStatusChangedEvent
+            {
+                FloorId = slot.FloorId,
+                SlotId = slot.Id,
+                Status = ParkingSlotStatuses.Available,
+                Vehicle = null,
+                OccurredAt = DateTime.UtcNow
+            });
         }
 
         return await GetByIdAsync(session.Id);

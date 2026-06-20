@@ -10,10 +10,12 @@ namespace ParkingSystem.Infrastructure.Services;
 public class PaymentService : IPaymentService
 {
     private readonly MongoDbContext _context;
+    private readonly IParkingMapNotifier _mapNotifier;
 
-    public PaymentService(MongoDbContext context)
+    public PaymentService(MongoDbContext context, IParkingMapNotifier mapNotifier)
     {
         _context = context;
+        _mapNotifier = mapNotifier;
     }
 
     public async Task<IEnumerable<PaymentDto>> GetAllAsync(string? status = null, string? method = null)
@@ -140,6 +142,16 @@ public class PaymentService : IPaymentService
                 slot.Status = ParkingSlotStatuses.Available;
                 slot.UpdatedAt = DateTime.UtcNow;
                 await _context.ParkingSlots.ReplaceOneAsync(s => s.Id == slot.Id, slot);
+
+                // Notify realtime map
+                await _mapNotifier.NotifySlotChangedAsync(slot.FloorId, new SlotStatusChangedEvent
+                {
+                    FloorId = slot.FloorId,
+                    SlotId = slot.Id,
+                    Status = ParkingSlotStatuses.Available,
+                    Vehicle = null,
+                    OccurredAt = DateTime.UtcNow
+                });
             }
         }
 
