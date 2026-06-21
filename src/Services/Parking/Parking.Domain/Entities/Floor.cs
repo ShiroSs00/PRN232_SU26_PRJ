@@ -9,4 +9,8 @@ public class Floor : AuditableEntity
     public int FloorNumber { get; set; }
 
     public string Name { get; set; } = string.Empty;
+
+    public int GridRows { get; set; }
+
+    public int GridCols { get; set; }
 }

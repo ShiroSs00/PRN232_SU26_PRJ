@@ -9,7 +9,7 @@ namespace Payment.API.Controllers;
 
 [ApiController]
 [Route("api/v1/fee-policies")]
-[Authorize(Roles = "Admin,FacilityManager")]
+[Authorize]
 public class FeePoliciesController : ControllerBase
 {
     private readonly IFeePolicyService _service;
@@ -20,6 +20,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin,FacilityManager")]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<FeePolicyDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetList(
         [FromQuery] string? buildingId,
@@ -34,7 +35,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpGet("active")]
-    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
     [ProducesResponseType(typeof(ApiResponse<List<FeePolicyDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActive(
         [FromQuery] string? buildingId,
@@ -46,6 +47,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "Admin,FacilityManager")]
     [ProducesResponseType(typeof(ApiResponse<FeePolicyDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(string id, CancellationToken ct)
@@ -57,6 +59,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,FacilityManager")]
     [ProducesResponseType(typeof(ApiResponse<FeePolicyDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(
@@ -73,6 +76,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,FacilityManager")]
     [ProducesResponseType(typeof(ApiResponse<FeePolicyDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
@@ -92,6 +96,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin,FacilityManager")]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
@@ -103,7 +108,7 @@ public class FeePoliciesController : ControllerBase
     }
 
     [HttpPost("calculate")]
-    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
     [ProducesResponseType(typeof(ApiResponse<CalculateFeeResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]

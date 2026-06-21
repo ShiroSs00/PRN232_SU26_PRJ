@@ -320,6 +320,207 @@
       }
     },
     {
+      "DownstreamPathTemplate": "/api/v1/vehicles/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/vehicles/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "vehicles-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/gates/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/gates/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "gates-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/reservations/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/reservations/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "reservations-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/parking-map/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/parking-map/{everything}",
+      "UpstreamHttpMethod": [
+        "GET"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "parking-map-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 300,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/optimization/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/optimization/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "optimization-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 120,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/api/v1/feedback/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/api/v1/feedback/{everything}",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer"
+      },
+      "Key": "feedback-service",
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "ClientIdHeader": "Host",
+        "DisableRateLimitHeaders": false,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 200,
+        "HttpStatusCode": 429,
+        "QuotaExceededMessage": "Rate limit exceeded. Please try again later."
+      }
+    },
+    {
+      "DownstreamPathTemplate": "/hubs/parking-map",
+      "DownstreamScheme": "ws",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "localhost",
+          "Port": 5002
+        }
+      ],
+      "UpstreamPathTemplate": "/hubs/parking-map",
+      "UpstreamHttpMethod": [
+        "GET",
+        "POST"
+      ],
+      "Key": "parking-map-hub"
+    },
+    {
       "DownstreamPathTemplate": "/api/v1/fee-policies/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [

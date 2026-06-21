@@ -19,6 +19,11 @@ public class ReportService : IReportService
     private const int SlotMaintenance = 4;
     private const int SessionActive = 1;
 
+    // Lệch múi giờ địa phương (GMT+7) để quy đổi giờ UTC khi tính khung giờ cao điểm.
+    private const int LocalUtcOffsetHours = 7;
+
+    private static int ToLocalHour(DateTime utc) => (utc.Hour + LocalUtcOffsetHours) % 24;
+
     private readonly MongoDbContext _db;
 
     public ReportService(MongoDbContext db)
@@ -101,19 +106,45 @@ public class ReportService : IReportService
         var checkInFilter = Builders<ParkingSessionReadModel>.Filter.And(
             Builders<ParkingSessionReadModel>.Filter.Gte(x => x.CheckInTime, from),
             Builders<ParkingSessionReadModel>.Filter.Lt(x => x.CheckInTime, to));
-        var checkIns = (int)await _db.ParkingSessions.CountDocumentsAsync(checkInFilter, cancellationToken: ct);
+        var checkInSessions = await _db.ParkingSessions.Find(checkInFilter).ToListAsync(ct);
 
         var checkOutFilter = Builders<ParkingSessionReadModel>.Filter.And(
             Builders<ParkingSessionReadModel>.Filter.Gte(x => x.CheckOutTime, from),
             Builders<ParkingSessionReadModel>.Filter.Lt(x => x.CheckOutTime, to));
-        var checkOuts = (int)await _db.ParkingSessions.CountDocumentsAsync(checkOutFilter, cancellationToken: ct);
+        var checkOutSessions = await _db.ParkingSessions.Find(checkOutFilter).ToListAsync(ct);
+
+        // Khung giờ cao điểm: gom theo giờ-trong-ngày (giờ địa phương GMT+7).
+        var peakHours = Enumerable.Range(0, 24)
+            .Select(h => new HourlyFlowBucket
+            {
+                Hour = h,
+                CheckIns = checkInSessions.Count(s => ToLocalHour(s.CheckInTime) == h),
+                CheckOuts = checkOutSessions.Count(s => s.CheckOutTime.HasValue && ToLocalHour(s.CheckOutTime.Value) == h)
+            })
+            .ToList();
+
+        // Thống kê theo loại phương tiện (gộp cả lượt vào và lượt ra).
+        var byVehicleType = checkInSessions.Select(s => s.VehicleTypeId)
+            .Concat(checkOutSessions.Select(s => s.VehicleTypeId))
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct()
+            .Select(id => new VehicleTypeFlow
+            {
+                VehicleTypeId = id,
+                CheckIns = checkInSessions.Count(s => s.VehicleTypeId == id),
+                CheckOuts = checkOutSessions.Count(s => s.VehicleTypeId == id)
+            })
+            .OrderByDescending(v => v.CheckIns + v.CheckOuts)
+            .ToList();
 
         return Result<VehicleFlowReport>.Ok(new VehicleFlowReport
         {
             From = from,
             To = to,
-            CheckIns = checkIns,
-            CheckOuts = checkOuts
+            CheckIns = checkInSessions.Count,
+            CheckOuts = checkOutSessions.Count,
+            PeakHours = peakHours,
+            ByVehicleType = byVehicleType
         });
     }
 
