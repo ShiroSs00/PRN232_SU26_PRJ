@@ -19,11 +19,15 @@ public class IncidentReport : AuditableEntity
 
     public string Description { get; set; } = string.Empty;
 
+    public IncidentType Type { get; set; } = IncidentType.Other;
+
     public IncidentStatus Status { get; set; } = IncidentStatus.Open;
 
     public string ReportedByUserId { get; set; } = string.Empty;
 
     public string? ResolvedByUserId { get; set; }
+
+    public string? ResolutionNote { get; set; }
 
     public DateTime? ResolvedAt { get; set; }
 }

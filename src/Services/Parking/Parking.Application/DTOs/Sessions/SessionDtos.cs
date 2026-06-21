@@ -111,6 +111,31 @@ public class MarkExceptionRequest
     public string? Note { get; set; }
 }
 
+/// <summary>Phí tạm tính cho một phiên đang gửi (Active), tính từ giờ vào tới thời điểm hiện tại.</summary>
+public class EstimateFeeResponse
+{
+    public string SessionId { get; set; } = string.Empty;
+
+    public string PlateNumber { get; set; } = string.Empty;
+
+    public string VehicleTypeId { get; set; } = string.Empty;
+
+    public DateTime CheckInTime { get; set; }
+
+    public DateTime EstimatedAt { get; set; }
+
+    /// <summary>Thời lượng gửi tính tới EstimatedAt.</summary>
+    public TimeSpan Duration { get; set; }
+
+    /// <summary>Phí tạm tính. 0 nếu phiên thuộc vé tháng (IsMonthly).</summary>
+    public decimal EstimatedFee { get; set; }
+
+    /// <summary>True nếu là vé tháng nên không phát sinh phí lượt.</summary>
+    public bool IsMonthly { get; set; }
+
+    public string FeePolicyId { get; set; } = string.Empty;
+}
+
 public class SessionListQuery
 {
     public string? BuildingId { get; set; }
