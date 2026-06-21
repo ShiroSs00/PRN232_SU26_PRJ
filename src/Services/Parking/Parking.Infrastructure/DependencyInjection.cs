@@ -17,6 +17,8 @@ public static class DependencyInjection
             configuration.GetSection(nameof(MongoDbSettings)));
         services.Configure<GeminiSettings>(
             configuration.GetSection(nameof(GeminiSettings)));
+        services.Configure<PaymentServiceSettings>(
+            configuration.GetSection(nameof(PaymentServiceSettings)));
 
         services.AddSingleton<Persistence.MongoDbContext>();
         services.AddSingleton<Persistence.MongoDbInitializer>();
@@ -44,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<ISlotAllocationService, SlotAllocationService>();
         services.AddScoped<IOptimizationService, OptimizationService>();
         services.AddHttpClient<IGeminiClient, GeminiClient>();
+        services.AddHttpClient<IFeeCalculationClient, FeeCalculationClient>();
 
         return services;
     }

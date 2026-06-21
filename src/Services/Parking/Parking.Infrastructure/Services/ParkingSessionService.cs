@@ -16,15 +16,18 @@ public class ParkingSessionService : IParkingSessionService
     private readonly MongoDbContext _db;
     private readonly IParkingMapNotifier _notifier;
     private readonly ISlotAllocationService _slotAllocation;
+    private readonly IFeeCalculationClient _feeCalculation;
 
     public ParkingSessionService(
         MongoDbContext db,
         IParkingMapNotifier notifier,
-        ISlotAllocationService slotAllocation)
+        ISlotAllocationService slotAllocation,
+        IFeeCalculationClient feeCalculation)
     {
         _db = db;
         _notifier = notifier;
         _slotAllocation = slotAllocation;
+        _feeCalculation = feeCalculation;
     }
 
     public async Task<Result<PagedResult<ParkingSessionDto>>> GetListAsync(
@@ -299,15 +302,30 @@ public class ParkingSessionService : IParkingSessionService
             return Result<ParkingSessionDto>.Fail("Parking session not found.", ParkingErrorCodes.SessionNotFound);
         if (session.Status != ParkingSessionStatus.Active)
             return Result<ParkingSessionDto>.Fail("Session is not active.", ParkingErrorCodes.SessionNotActive);
-        if (request.TotalFee < 0)
-            return Result<ParkingSessionDto>.Fail("TotalFee must be non-negative.", ParkingErrorCodes.ValidationFailed);
 
         var now = DateTime.UtcNow;
+        var totalFee = 0m;
+        if (!session.IsMonthly || request.IsLostTicket)
+        {
+            var feeResult = await _feeCalculation.CalculateAsync(
+                session.BuildingId,
+                session.VehicleTypeId,
+                session.CheckInTime,
+                now,
+                request.IsLostTicket,
+                ct);
+            if (!feeResult.Success)
+                return Result<ParkingSessionDto>.Fail(feeResult.Error!, feeResult.ErrorCode!);
+
+            totalFee = feeResult.Value!.Amount;
+            if (totalFee < 0)
+                return Result<ParkingSessionDto>.Fail("Calculated fee must be non-negative.", ParkingErrorCodes.ValidationFailed);
+        }
 
         var sessionUpdate = Builders<ParkingSession>.Update
             .Set(x => x.CheckOutTime, now)
             .Set(x => x.Status, ParkingSessionStatus.Completed)
-            .Set(x => x.TotalFee, request.TotalFee)
+            .Set(x => x.TotalFee, totalFee)
             .Set(x => x.ExitGate, request.ExitGate?.Trim())
             .Set(x => x.CheckOutNote, request.CheckOutNote?.Trim())
             .Set(x => x.PaymentId, request.PaymentId?.Trim())
@@ -334,7 +352,7 @@ public class ParkingSessionService : IParkingSessionService
 
         // Log.
         await WriteLogAsync(session.Id, ParkingSessionLogAction.CheckOut, session.ParkingSlotId, null,
-            $"Check-out plate {session.PlateNumber}. Fee {request.TotalFee:0.##}.", userId, now, ct);
+            $"Check-out plate {session.PlateNumber}. Fee {totalFee:0.##}.", userId, now, ct);
 
         // Notify realtime.
         if (slot is not null)
