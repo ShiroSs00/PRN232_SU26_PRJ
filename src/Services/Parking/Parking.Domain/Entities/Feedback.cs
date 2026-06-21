@@ -19,6 +19,8 @@ public class Feedback : AuditableEntity
 
     public int Rating { get; set; }
 
+    public FeedbackType Type { get; set; } = FeedbackType.Other;
+
     public string Content { get; set; } = string.Empty;
 
     public FeedbackStatus Status { get; set; } = FeedbackStatus.New;

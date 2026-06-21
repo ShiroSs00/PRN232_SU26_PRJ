@@ -15,6 +15,16 @@ public class ParkingSlot : AuditableEntity
 
     public string Code { get; set; } = string.Empty;
 
+    public string? Label { get; set; }
+
+    public int Row { get; set; }
+
+    public int Column { get; set; }
+
+    public int RowSpan { get; set; } = 1;
+
+    public int ColSpan { get; set; } = 1;
+
     public SlotStatus Status { get; set; } = SlotStatus.Available;
 
     public string? CurrentSessionId { get; set; }

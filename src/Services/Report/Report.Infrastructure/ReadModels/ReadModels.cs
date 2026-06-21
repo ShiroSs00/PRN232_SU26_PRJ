@@ -63,6 +63,8 @@ public class ParkingSessionReadModel
 
     public int Status { get; set; }   // ParkingSessionStatus: Active=1, Completed=2, ...
 
+    public string VehicleTypeId { get; set; } = string.Empty;
+
     public DateTime CheckInTime { get; set; }
 
     public DateTime? CheckOutTime { get; set; }

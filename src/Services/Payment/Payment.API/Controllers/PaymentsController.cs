@@ -10,7 +10,7 @@ namespace Payment.API.Controllers;
 
 [ApiController]
 [Route("api/v1/payments")]
-[Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+[Authorize]
 public class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _payments;
@@ -23,6 +23,7 @@ public class PaymentsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<PaymentDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetList(
         [FromQuery] string? sessionId,
@@ -37,6 +38,7 @@ public class PaymentsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
     [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(string id, CancellationToken ct)
@@ -47,7 +49,9 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<PaymentDto>.Ok(result.Value!));
     }
 
+    // Driver xem payment theo phiên (để thanh toán lượt gửi của mình).
     [HttpGet("by-session/{sessionId}")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
     [ProducesResponseType(typeof(ApiResponse<List<PaymentDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetBySession(string sessionId, CancellationToken ct)
     {
@@ -55,7 +59,12 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<List<PaymentDto>>.Ok(result.Value!));
     }
 
+    // Driver có thể tạo payment cho phiên của mình.
+    // Lưu ý: Payment là service riêng, không truy được Vehicle ở Parking nên
+    // không enforce ownership chặt cross-service; Driver chỉ thao tác khi biết sessionId
+    // (lấy từ "lượt gửi của tôi"). Đủ cho phạm vi đồ án.
     [HttpPost]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
     [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -83,6 +92,7 @@ public class PaymentsController : ControllerBase
     }
 
     [HttpPost("{id}/confirm")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -98,6 +108,7 @@ public class PaymentsController : ControllerBase
     }
 
     [HttpPost("{id}/cancel")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -109,7 +120,9 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<PaymentDto>.Ok(result.Value!, "Payment cancelled."));
     }
 
+    // Driver tạo link PayOS để tự thanh toán.
     [HttpPost("{id}/payos-link")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
     [ProducesResponseType(typeof(ApiResponse<PayOsLinkResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
