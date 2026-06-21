@@ -82,7 +82,10 @@ public class CheckOutRequest
 {
     public string? ExitGate { get; set; }
 
+    [Obsolete("TotalFee is calculated by backend during checkout.")]
     public decimal TotalFee { get; set; }
+
+    public bool IsLostTicket { get; set; }
 
     public string? CheckOutNote { get; set; }
 

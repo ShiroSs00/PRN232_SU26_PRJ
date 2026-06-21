@@ -18,6 +18,7 @@ builder.Configuration.AddJsonFile(
     reloadOnChange: true);
 
 builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
