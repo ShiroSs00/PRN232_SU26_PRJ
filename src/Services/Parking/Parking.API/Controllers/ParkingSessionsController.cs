@@ -89,6 +89,7 @@ public class ParkingSessionsController : ControllerBase
     }
 
     [HttpPost("check-in")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<ParkingSessionDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
@@ -107,6 +108,7 @@ public class ParkingSessionsController : ControllerBase
     }
 
     [HttpPost("{id}/check-out")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<ParkingSessionDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
@@ -123,6 +125,7 @@ public class ParkingSessionsController : ControllerBase
     }
 
     [HttpPost("{id}/change-slot")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<ParkingSessionDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
@@ -170,6 +173,34 @@ public class ParkingSessionsController : ControllerBase
         if (!result.Success)
             return MapError(result);
         return Ok(ApiResponse<ParkingSessionDto>.Ok(result.Value!, "Đã đánh dấu ngoại lệ."));
+    }
+
+    // Phí tạm tính cho phiên đang gửi (Active) — Driver theo dõi lượt gửi của mình.
+    [HttpGet("{id}/estimate-fee")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
+    [ProducesResponseType(typeof(ApiResponse<EstimateFeeResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> EstimateFee(string id, CancellationToken ct)
+    {
+        // Driver chỉ được xem phí tạm tính lượt gửi của xe mình; staff/manager xem mọi phiên.
+        var enforceOwnership = User.IsInRole("Driver")
+            && !User.IsInRole("Admin")
+            && !User.IsInRole("FacilityManager")
+            && !User.IsInRole("ParkingStaff");
+        var result = await _service.EstimateFeeAsync(id, GetUserId(), enforceOwnership, ct);
+        if (!result.Success)
+        {
+            var status = result.ErrorCode switch
+            {
+                ParkingErrorCodes.SessionNotFound => StatusCodes.Status404NotFound,
+                ParkingErrorCodes.SessionNotActive => StatusCodes.Status409Conflict,
+                ParkingErrorCodes.SessionAccessDenied => StatusCodes.Status403Forbidden,
+                _ => StatusCodes.Status400BadRequest
+            };
+            return StatusCode(status, ApiResponse.Fail(result.Error!));
+        }
+        return Ok(ApiResponse<EstimateFeeResponse>.Ok(result.Value!));
     }
 
     private IActionResult MapError(Result<ParkingSessionDto> result)

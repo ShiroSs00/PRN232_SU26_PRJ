@@ -21,6 +21,17 @@ public interface IParkingSessionService
 
     Task<Result<ParkingSessionDto>> GetActiveByPlateAsync(string plateNumber, CancellationToken ct = default);
 
+    /// <summary>
+    /// Phí tạm tính cho một phiên đang gửi (Active), tính từ giờ vào tới hiện tại.
+    /// Khi <paramref name="enforceOwnership"/> = true (caller là Driver), chỉ cho xem phí
+    /// của phiên gắn với xe mà driver đã đăng ký; ngược lại trả SessionAccessDenied.
+    /// </summary>
+    Task<Result<EstimateFeeResponse>> EstimateFeeAsync(
+        string id,
+        string? requestUserId,
+        bool enforceOwnership,
+        CancellationToken ct = default);
+
     Task<Result<ParkingSessionDto>> CheckInAsync(
         CheckInRequest request,
         string userId,

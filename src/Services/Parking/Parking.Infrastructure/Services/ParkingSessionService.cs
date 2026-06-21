@@ -324,7 +324,9 @@ public class ParkingSessionService : IParkingSessionService
 
         var sessionUpdate = Builders<ParkingSession>.Update
             .Set(x => x.CheckOutTime, now)
-            .Set(x => x.Status, ParkingSessionStatus.Completed)
+            .Set(x => x.Status, request.IsLostTicket
+                ? ParkingSessionStatus.LostTicket
+                : ParkingSessionStatus.Completed)
             .Set(x => x.TotalFee, totalFee)
             .Set(x => x.ExitGate, request.ExitGate?.Trim())
             .Set(x => x.CheckOutNote, request.CheckOutNote?.Trim())
@@ -351,8 +353,13 @@ public class ParkingSessionService : IParkingSessionService
             cancellationToken: ct);
 
         // Log.
-        await WriteLogAsync(session.Id, ParkingSessionLogAction.CheckOut, session.ParkingSlotId, null,
-            $"Check-out plate {session.PlateNumber}. Fee {totalFee:0.##}.", userId, now, ct);
+        await WriteLogAsync(session.Id,
+            request.IsLostTicket ? ParkingSessionLogAction.LostTicket : ParkingSessionLogAction.CheckOut,
+            session.ParkingSlotId, null,
+            request.IsLostTicket
+                ? $"Check-out plate {session.PlateNumber} with LOST TICKET. Fee {totalFee:0.##}."
+                : $"Check-out plate {session.PlateNumber}. Fee {totalFee:0.##}.",
+            userId, now, ct);
 
         // Notify realtime.
         if (slot is not null)
@@ -360,6 +367,82 @@ public class ParkingSessionService : IParkingSessionService
 
         var updated = await _db.ParkingSessions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         return Result<ParkingSessionDto>.Ok(Map(updated!));
+    }
+
+    public async Task<Result<EstimateFeeResponse>> EstimateFeeAsync(
+        string id,
+        string? requestUserId,
+        bool enforceOwnership,
+        CancellationToken ct = default)
+    {
+        var session = await _db.ParkingSessions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (session is null)
+            return Result<EstimateFeeResponse>.Fail("Parking session not found.", ParkingErrorCodes.SessionNotFound);
+        if (session.Status != ParkingSessionStatus.Active)
+            return Result<EstimateFeeResponse>.Fail("Session is not active.", ParkingErrorCodes.SessionNotActive);
+
+        // Driver chỉ được xem phí tạm tính của lượt gửi thuộc xe mình đã đăng ký.
+        if (enforceOwnership)
+        {
+            var owns = await DriverOwnsSessionAsync(session, requestUserId, ct);
+            if (!owns)
+                return Result<EstimateFeeResponse>.Fail(
+                    "You can only view your own session's estimated fee.",
+                    ParkingErrorCodes.SessionAccessDenied);
+        }
+
+        var now = DateTime.UtcNow;
+        var response = new EstimateFeeResponse
+        {
+            SessionId = session.Id,
+            PlateNumber = session.PlateNumber,
+            VehicleTypeId = session.VehicleTypeId,
+            CheckInTime = session.CheckInTime,
+            EstimatedAt = now,
+            Duration = now - session.CheckInTime,
+            IsMonthly = session.IsMonthly
+        };
+
+        // Vé tháng không phát sinh phí lượt.
+        if (session.IsMonthly)
+            return Result<EstimateFeeResponse>.Ok(response);
+
+        var feeResult = await _feeCalculation.CalculateAsync(
+            session.BuildingId,
+            session.VehicleTypeId,
+            session.CheckInTime,
+            now,
+            false,
+            ct);
+        if (!feeResult.Success)
+            return Result<EstimateFeeResponse>.Fail(feeResult.Error!, feeResult.ErrorCode!);
+
+        response.EstimatedFee = feeResult.Value!.Amount;
+        response.FeePolicyId = feeResult.Value!.FeePolicyId;
+        return Result<EstimateFeeResponse>.Ok(response);
+    }
+
+    /// <summary>
+    /// True nếu phiên gửi thuộc một xe mà driver đã đăng ký (so khớp biển số cả dạng
+    /// gốc và dạng chuẩn hoá). Dùng để chặn driver xem dữ liệu phiên của người khác.
+    /// </summary>
+    private async Task<bool> DriverOwnsSessionAsync(
+        ParkingSession session,
+        string? driverUserId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(driverUserId))
+            return false;
+
+        var vehicles = await _db.Vehicles
+            .Find(v => v.OwnerUserId == driverUserId && v.IsActive)
+            .Project(v => new { v.PlateNumber, v.PlateNumberNormalized })
+            .ToListAsync(ct);
+
+        var sessionPlate = PlateNumberNormalizer.Normalize(session.PlateNumber);
+        return vehicles.Any(v =>
+            PlateNumberNormalizer.Normalize(v.PlateNumber) == sessionPlate
+            || PlateNumberNormalizer.Normalize(v.PlateNumberNormalized) == sessionPlate);
     }
 
     public async Task<Result<ParkingSessionDto>> ChangeSlotAsync(

@@ -46,5 +46,7 @@ public static class AuthErrorCodes
     public const string InvalidRefreshToken = "INVALID_REFRESH_TOKEN";
     public const string InvalidRole = "INVALID_ROLE";
     public const string DuplicateRole = "DUPLICATE_ROLE";
+    public const string RoleNotFound = "ROLE_NOT_FOUND";
+    public const string SystemRoleProtected = "SYSTEM_ROLE_PROTECTED";
     public const string ValidationFailed = "VALIDATION_FAILED";
 }

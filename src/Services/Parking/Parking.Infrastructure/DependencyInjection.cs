@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IParkingSessionService, ParkingSessionService>();
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IFeedbackService, FeedbackService>();
+        services.AddScoped<IIncidentService, IncidentService>();
 
         // Tối ưu phân bổ slot + AI
         services.AddScoped<ISlotAllocationService, SlotAllocationService>();

@@ -29,6 +29,11 @@ public static class ParkingErrorCodes
     public const string ActiveSessionExists = "ACTIVE_SESSION_EXISTS";
     public const string SessionNotActive = "SESSION_NOT_ACTIVE";
     public const string NoAvailableSlot = "NO_AVAILABLE_SLOT";
+    public const string SessionAccessDenied = "SESSION_ACCESS_DENIED";
+
+    // Incident
+    public const string IncidentNotFound = "INCIDENT_NOT_FOUND";
+    public const string InvalidIncidentStatus = "INVALID_INCIDENT_STATUS";
 
     // Reservation
     public const string ReservationNotFound = "RESERVATION_NOT_FOUND";
