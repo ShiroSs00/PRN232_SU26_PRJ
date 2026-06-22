@@ -59,3 +59,9 @@ appsettings.Local.json
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Node scripts (seed/inspect) — chỉ giữ source, bỏ deps
+scripts/node_modules/
+
+# Claude Code nội bộ
+.claude/

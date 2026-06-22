@@ -105,6 +105,7 @@ public class FeePolicyService : IFeePolicyService
             MonthlyPrice = request.MonthlyPrice,
             LostTicketFee = request.LostTicketFee,
             OvertimeFee = request.OvertimeFee,
+            OvertimeAfterHours = request.OvertimeAfterHours,
             EffectiveFrom = request.EffectiveFrom ?? now,
             EffectiveTo = request.EffectiveTo,
             CreatedAt = now,
@@ -130,6 +131,7 @@ public class FeePolicyService : IFeePolicyService
             .Set(x => x.MonthlyPrice, request.MonthlyPrice)
             .Set(x => x.LostTicketFee, request.LostTicketFee)
             .Set(x => x.OvertimeFee, request.OvertimeFee)
+            .Set(x => x.OvertimeAfterHours, request.OvertimeAfterHours)
             .Set(x => x.EffectiveFrom, request.EffectiveFrom)
             .Set(x => x.EffectiveTo, request.EffectiveTo)
             .Set(x => x.IsActive, request.IsActive)
@@ -231,11 +233,21 @@ public class FeePolicyService : IFeePolicyService
             }
         }
 
-        // Overtime: only relevant for Hourly/Daily with EffectiveTo overrun, applied if duration > 24h on hourly.
-        if (policy.OvertimeFee > 0 && policy.PricingType == PricingType.Hourly && duration.TotalHours > 24)
+        // Phụ phí quá giờ cố định 1 lần: áp cho PerTurn và Hourly khi thời gian gửi
+        // vượt ngưỡng OvertimeAfterHours (mặc định 24h nếu không cấu hình, giữ hành vi cũ).
+        if (policy.OvertimeFee > 0
+            && (policy.PricingType == PricingType.PerTurn || policy.PricingType == PricingType.Hourly))
         {
-            amount += policy.OvertimeFee;
-            breakdown.Add(new FeeBreakdownItem { Description = "Overtime surcharge", Amount = policy.OvertimeFee });
+            var threshold = policy.OvertimeAfterHours ?? 24;
+            if (duration.TotalHours > threshold)
+            {
+                amount += policy.OvertimeFee;
+                breakdown.Add(new FeeBreakdownItem
+                {
+                    Description = $"Phụ phí quá giờ (sau {threshold}h)",
+                    Amount = policy.OvertimeFee
+                });
+            }
         }
 
         if (request.IsLostTicket && policy.LostTicketFee > 0)
@@ -282,6 +294,7 @@ public class FeePolicyService : IFeePolicyService
         MonthlyPrice = x.MonthlyPrice,
         LostTicketFee = x.LostTicketFee,
         OvertimeFee = x.OvertimeFee,
+        OvertimeAfterHours = x.OvertimeAfterHours,
         EffectiveFrom = x.EffectiveFrom,
         EffectiveTo = x.EffectiveTo,
         IsActive = x.IsActive,

@@ -88,6 +88,9 @@ public class IncidentService : IIncidentService
             ParkingSlotId = string.IsNullOrWhiteSpace(request.ParkingSlotId) ? null : request.ParkingSlotId,
             VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
             PlateNumber = string.IsNullOrWhiteSpace(plate) ? null : PlateNumberNormalizer.Normalize(plate),
+            OccupyingPlateNumber = string.IsNullOrWhiteSpace(request.OccupyingPlateNumber)
+                ? null
+                : PlateNumberNormalizer.Normalize(request.OccupyingPlateNumber),
             Title = request.Title.Trim(),
             Description = request.Description?.Trim() ?? string.Empty,
             Type = Enum.IsDefined(typeof(IncidentType), request.Type)
@@ -132,6 +135,8 @@ public class IncidentService : IIncidentService
             update = update.Set(x => x.VehicleId, string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId);
         if (request.PlateNumber is not null)
             update = update.Set(x => x.PlateNumber, string.IsNullOrWhiteSpace(request.PlateNumber) ? null : PlateNumberNormalizer.Normalize(request.PlateNumber));
+        if (request.OccupyingPlateNumber is not null)
+            update = update.Set(x => x.OccupyingPlateNumber, string.IsNullOrWhiteSpace(request.OccupyingPlateNumber) ? null : PlateNumberNormalizer.Normalize(request.OccupyingPlateNumber));
 
         await _db.IncidentReports.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
 
@@ -190,6 +195,7 @@ public class IncidentService : IIncidentService
         ParkingSlotId = x.ParkingSlotId,
         VehicleId = x.VehicleId,
         PlateNumber = x.PlateNumber,
+        OccupyingPlateNumber = x.OccupyingPlateNumber,
         Title = x.Title,
         Description = x.Description,
         Type = x.Type,

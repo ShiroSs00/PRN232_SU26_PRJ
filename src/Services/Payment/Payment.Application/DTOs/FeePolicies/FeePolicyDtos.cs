@@ -26,6 +26,8 @@ public class FeePolicyDto
 
     public decimal OvertimeFee { get; set; }
 
+    public int? OvertimeAfterHours { get; set; }
+
     public DateTime EffectiveFrom { get; set; }
 
     public DateTime? EffectiveTo { get; set; }
@@ -59,6 +61,8 @@ public class CreateFeePolicyRequest
 
     public decimal OvertimeFee { get; set; }
 
+    public int? OvertimeAfterHours { get; set; }
+
     public DateTime? EffectiveFrom { get; set; }
 
     public DateTime? EffectiveTo { get; set; }
@@ -81,6 +85,8 @@ public class UpdateFeePolicyRequest
     public decimal LostTicketFee { get; set; }
 
     public decimal OvertimeFee { get; set; }
+
+    public int? OvertimeAfterHours { get; set; }
 
     public DateTime EffectiveFrom { get; set; }
 
