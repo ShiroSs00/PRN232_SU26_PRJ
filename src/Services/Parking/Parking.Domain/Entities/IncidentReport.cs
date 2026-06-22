@@ -15,6 +15,9 @@ public class IncidentReport : AuditableEntity
 
     public string? PlateNumber { get; set; }
 
+    /// <summary>Biển số xe vi phạm/chiếm chỗ (khác với PlateNumber là xe của người báo).</summary>
+    public string? OccupyingPlateNumber { get; set; }
+
     public string Title { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;

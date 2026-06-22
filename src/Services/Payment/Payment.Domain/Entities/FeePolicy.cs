@@ -25,6 +25,9 @@ public class FeePolicy : AuditableEntity
 
     public decimal OvertimeFee { get; set; }
 
+    /// <summary>Số giờ gửi trước khi áp phụ phí quá giờ. Null = không áp quá giờ.</summary>
+    public int? OvertimeAfterHours { get; set; }
+
     public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow;
 
     public DateTime? EffectiveTo { get; set; }

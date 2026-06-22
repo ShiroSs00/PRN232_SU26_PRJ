@@ -10,6 +10,8 @@ public class IncidentReportDto
     public string? ParkingSlotId { get; set; }
     public string? VehicleId { get; set; }
     public string? PlateNumber { get; set; }
+    /// <summary>Biển số xe vi phạm/chiếm chỗ (nếu sự cố do xe khác gây ra).</summary>
+    public string? OccupyingPlateNumber { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public IncidentType Type { get; set; }
@@ -29,6 +31,7 @@ public class CreateIncidentRequest
     public string? ParkingSlotId { get; set; }
     public string? VehicleId { get; set; }
     public string? PlateNumber { get; set; }
+    public string? OccupyingPlateNumber { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int Type { get; set; } = (int)IncidentType.Other;
@@ -44,6 +47,7 @@ public class UpdateIncidentRequest
     public string? ParkingSlotId { get; set; }
     public string? VehicleId { get; set; }
     public string? PlateNumber { get; set; }
+    public string? OccupyingPlateNumber { get; set; }
 }
 
 public class ResolveIncidentRequest
