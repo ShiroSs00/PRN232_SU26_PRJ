@@ -251,6 +251,84 @@ public class PayOsService : IPayOsService
         return Result.Ok();
     }
 
+    public async Task<Result<PaymentDto>> CheckPaymentStatusAsync(string paymentId, CancellationToken ct = default)
+    {
+        var payment = await _db.Payments.Find(x => x.Id == paymentId).FirstOrDefaultAsync(ct);
+        if (payment is null)
+            return Result<PaymentDto>.Fail("Payment not found.", PaymentErrorCodes.PaymentNotFound);
+        if (payment.Status == PaymentStatus.Paid)
+            return Result<PaymentDto>.Ok(Map(payment));
+
+        if (string.IsNullOrEmpty(payment.PaymentLinkId))
+            return Result<PaymentDto>.Fail("No PayOS payment link associated.", PaymentErrorCodes.ValidationFailed);
+
+        try
+        {
+            using var http = new HttpClient();
+            http.DefaultRequestHeaders.Add("x-client-id", _settings.ClientId);
+            http.DefaultRequestHeaders.Add("x-api-key", _settings.ApiKey);
+
+            var baseUrl = string.IsNullOrWhiteSpace(_settings.BaseUrl)
+                ? "https://api-merchant.payos.vn"
+                : _settings.BaseUrl;
+            var resp = await http.GetAsync($"{baseUrl}/v2/payment-requests/{payment.PaymentLinkId}", ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("PayOS status check failed for payment {PaymentId}: {Status} {Body}", paymentId, resp.StatusCode, body);
+                return Result<PaymentDto>.Fail($"PayOS API returned {resp.StatusCode}.", PaymentErrorCodes.PayOsRequestFailed);
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            var data = doc.RootElement.GetProperty("data");
+            var status = data.GetProperty("status").GetString();
+
+            if (string.Equals(status, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                var now = DateTime.UtcNow;
+                var update = Builders<Domain.Entities.Payment>.Update
+                    .Set(x => x.Status, PaymentStatus.Paid)
+                    .Set(x => x.PaidAt, now)
+                    .Set(x => x.Method, PaymentMethod.EWallet);
+                await _db.Payments.UpdateOneAsync(x => x.Id == paymentId, update, cancellationToken: ct);
+
+                var updated = await _db.Payments.Find(x => x.Id == paymentId).FirstOrDefaultAsync(ct);
+                return Result<PaymentDto>.Ok(Map(updated!));
+            }
+
+            return Result<PaymentDto>.Ok(Map(payment));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PayOS status check error for payment {PaymentId}", paymentId);
+            return Result<PaymentDto>.Fail($"PayOS request failed: {ex.Message}", PaymentErrorCodes.PayOsRequestFailed);
+        }
+    }
+
+    private static PaymentDto Map(Domain.Entities.Payment x) => new()
+    {
+        Id = x.Id,
+        ParkingSessionId = x.ParkingSessionId,
+        SubscriptionId = x.SubscriptionId,
+        PlateNumber = x.PlateNumber,
+        VehicleId = x.VehicleId,
+        ShiftId = x.ShiftId,
+        CreatedByUserId = x.CreatedByUserId,
+        ConfirmedByUserId = x.ConfirmedByUserId,
+        TransactionCode = x.TransactionCode,
+        Amount = x.Amount,
+        Method = x.Method,
+        Status = x.Status,
+        OrderCode = x.OrderCode,
+        PaymentLinkId = x.PaymentLinkId,
+        CheckoutUrl = x.CheckoutUrl,
+        CreatedAt = x.CreatedAt,
+        PaidAt = x.PaidAt,
+        RefundedAt = x.RefundedAt,
+        Note = x.Note
+    };
+
     private static long GenerateOrderCode()
     {
         // PayOS orderCode must fit Int64 and be unique per merchant.
