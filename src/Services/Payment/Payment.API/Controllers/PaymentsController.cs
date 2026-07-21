@@ -155,6 +155,28 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<PayOsLinkResponse>.Ok(result.Value!, "PayOS payment link created."));
     }
 
+    // Driver check PayOS payment status (polling when webhook can't reach localhost).
+    [HttpGet("{id}/payos-status")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
+    [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CheckPayOsStatus(string id, CancellationToken ct)
+    {
+        var result = await _payos.CheckPaymentStatusAsync(id, ct);
+        if (!result.Success)
+        {
+            var status = result.ErrorCode switch
+            {
+                PaymentErrorCodes.PaymentNotFound => StatusCodes.Status404NotFound,
+                PaymentErrorCodes.PayOsRequestFailed => StatusCodes.Status502BadGateway,
+                _ => StatusCodes.Status400BadRequest
+            };
+            return StatusCode(status, ApiResponse.Fail(result.Error!));
+        }
+        return Ok(ApiResponse<PaymentDto>.Ok(result.Value!, "Payment status checked."));
+    }
+
     /// <summary>PayOS webhook endpoint — anonymous; signature is verified inside the service.</summary>
     [HttpPost("webhook/payos")]
     [AllowAnonymous]
