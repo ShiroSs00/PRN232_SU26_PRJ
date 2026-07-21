@@ -6,7 +6,9 @@ public class PaymentDto
 {
     public string Id { get; set; } = string.Empty;
 
-    public string ParkingSessionId { get; set; } = string.Empty;
+    public string? ParkingSessionId { get; set; }
+
+    public string? SubscriptionId { get; set; }
 
     public string PlateNumber { get; set; } = string.Empty;
 
@@ -43,7 +45,9 @@ public class PaymentDto
 
 public class CreatePaymentRequest
 {
-    public string ParkingSessionId { get; set; } = string.Empty;
+    public string? ParkingSessionId { get; set; }
+
+    public string? SubscriptionId { get; set; }
 
     public string PlateNumber { get; set; } = string.Empty;
 

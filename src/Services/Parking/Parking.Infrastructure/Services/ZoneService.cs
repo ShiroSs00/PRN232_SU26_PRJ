@@ -21,6 +21,7 @@ public class ZoneService : IZoneService
     public async Task<Result<PagedResult<ZoneDto>>> GetListAsync(
         string? buildingId,
         string? floorId,
+        string? vehicleTypeId,
         bool? isActive,
         int page,
         int pageSize,
@@ -34,6 +35,7 @@ public class ZoneService : IZoneService
         var filters = new List<FilterDefinition<Zone>>();
         if (!string.IsNullOrWhiteSpace(buildingId)) filters.Add(fb.Eq(x => x.BuildingId, buildingId));
         if (!string.IsNullOrWhiteSpace(floorId)) filters.Add(fb.Eq(x => x.FloorId, floorId));
+        if (!string.IsNullOrWhiteSpace(vehicleTypeId)) filters.Add(fb.Eq(x => x.VehicleTypeId, vehicleTypeId));
         if (isActive.HasValue) filters.Add(fb.Eq(x => x.IsActive, isActive.Value));
 
         var filter = filters.Count == 0 ? fb.Empty : fb.And(filters);

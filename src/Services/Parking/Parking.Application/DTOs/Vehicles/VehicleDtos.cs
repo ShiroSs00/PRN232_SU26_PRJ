@@ -1,3 +1,5 @@
+using Parking.Domain.Enums;
+
 namespace Parking.Application.DTOs.Vehicles;
 
 public class VehicleDto
@@ -9,6 +11,8 @@ public class VehicleDto
     public string PlateNumberNormalized { get; set; } = string.Empty;
 
     public string VehicleTypeId { get; set; } = string.Empty;
+
+    public VehicleCategory VehicleCategory { get; set; } = VehicleCategory.Motorcycle;
 
     public string? OwnerUserId { get; set; }
 

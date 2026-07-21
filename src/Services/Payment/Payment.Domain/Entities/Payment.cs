@@ -6,7 +6,9 @@ namespace Payment.Domain.Entities;
 
 public class Payment : BaseEntity
 {
-    public string ParkingSessionId { get; set; } = string.Empty;
+    public string? ParkingSessionId { get; set; }
+
+    public string? SubscriptionId { get; set; }
 
     public string PlateNumber { get; set; } = string.Empty;
 

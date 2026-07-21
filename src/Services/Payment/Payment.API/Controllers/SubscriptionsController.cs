@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Payment.Application.Abstractions;
 using Payment.Application.Common;
 using Payment.Application.DTOs;
@@ -9,7 +10,7 @@ namespace Payment.API.Controllers;
 
 [ApiController]
 [Route("api/v1/subscriptions")]
-[Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+[Authorize]
 public class SubscriptionsController : ControllerBase
 {
     private readonly ISubscriptionService _service;
@@ -20,6 +21,7 @@ public class SubscriptionsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<SubscriptionDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetList(
         [FromQuery] int? status,
@@ -29,6 +31,19 @@ public class SubscriptionsController : ControllerBase
         CancellationToken ct = default)
     {
         var result = await _service.GetListAsync(status, buildingId, page, pageSize, ct);
+        return Ok(ApiResponse<PagedResult<SubscriptionDto>>.Ok(result.Value!));
+    }
+
+    [HttpGet("my")]
+    [Authorize(Roles = "Driver")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResult<SubscriptionDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMySubscriptions(
+        [FromQuery] int? status,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await _service.GetMySubscriptionsAsync(GetUserId(), status, page, pageSize, ct);
         return Ok(ApiResponse<PagedResult<SubscriptionDto>>.Ok(result.Value!));
     }
 
@@ -86,6 +101,52 @@ public class SubscriptionsController : ControllerBase
         return Ok(ApiResponse<SubscriptionDto>.Ok(result.Value!, "Subscription updated."));
     }
 
+    [HttpPost("request")]
+    [Authorize(Roles = "Driver")]
+    [ProducesResponseType(typeof(ApiResponse<SubscriptionDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Request(
+        [FromBody] CreateSubscriptionRequest request,
+        CancellationToken ct)
+    {
+        var result = await _service.RequestAsync(request, GetUserId(), ct);
+        if (!result.Success)
+            return BadRequest(ApiResponse.Fail(result.Error!));
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = result.Value!.Id },
+            ApiResponse<SubscriptionDto>.Ok(result.Value!, "Subscription request created."));
+    }
+
+    [HttpPost("{id}/approve")]
+    [Authorize(Roles = "Admin,FacilityManager")]
+    [ProducesResponseType(typeof(ApiResponse<SubscriptionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Approve(string id, CancellationToken ct)
+    {
+        var result = await _service.ApproveAsync(id, GetUserId(), ct);
+        if (!result.Success)
+            return MapError(result);
+        return Ok(ApiResponse<SubscriptionDto>.Ok(result.Value!, "Subscription approved."));
+    }
+
+    [HttpPost("{id}/reject")]
+    [Authorize(Roles = "Admin,FacilityManager")]
+    [ProducesResponseType(typeof(ApiResponse<SubscriptionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Reject(
+        string id,
+        [FromBody] RejectSubscriptionRequest? request,
+        CancellationToken ct)
+    {
+        var result = await _service.RejectAsync(id, request?.Reason, ct);
+        if (!result.Success)
+            return MapError(result);
+        return Ok(ApiResponse<SubscriptionDto>.Ok(result.Value!, "Subscription rejected."));
+    }
+
     [HttpPost("{id}/renew")]
     [Authorize(Roles = "Admin,FacilityManager")]
     [ProducesResponseType(typeof(ApiResponse<SubscriptionDto>), StatusCodes.Status200OK)]
@@ -134,4 +195,8 @@ public class SubscriptionsController : ControllerBase
         };
         return StatusCode(status, ApiResponse.Fail(result.Error!));
     }
+
+    private string? GetUserId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+        User.FindFirstValue("sub");
 }

@@ -70,29 +70,56 @@ public class PaymentService : IPaymentService
         return Result<List<PaymentDto>>.Ok(items.Select(Map).ToList());
     }
 
+    public async Task<Result<List<PaymentDto>>> GetBySubscriptionAsync(string subscriptionId, CancellationToken ct = default)
+    {
+        var items = await _db.Payments.Find(x => x.SubscriptionId == subscriptionId)
+            .SortByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
+        return Result<List<PaymentDto>>.Ok(items.Select(Map).ToList());
+    }
+
     public async Task<Result<PaymentDto>> CreateAsync(string createdByUserId, CreatePaymentRequest request, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(request.ParkingSessionId))
-            return Result<PaymentDto>.Fail("ParkingSessionId is required.", PaymentErrorCodes.ValidationFailed);
+        var hasSession = !string.IsNullOrWhiteSpace(request.ParkingSessionId);
+        var hasSubscription = !string.IsNullOrWhiteSpace(request.SubscriptionId);
+
+        if (!hasSession && !hasSubscription)
+            return Result<PaymentDto>.Fail("ParkingSessionId or SubscriptionId is required.", PaymentErrorCodes.ValidationFailed);
         if (string.IsNullOrWhiteSpace(request.PlateNumber))
             return Result<PaymentDto>.Fail("PlateNumber is required.", PaymentErrorCodes.ValidationFailed);
         if (request.Amount <= 0)
             return Result<PaymentDto>.Fail("Amount must be positive.", PaymentErrorCodes.ValidationFailed);
 
-        // Disallow duplicate Pending/Paid payment for the same session.
-        var existing = await _db.Payments
-            .Find(x => x.ParkingSessionId == request.ParkingSessionId &&
-                       (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
-            .FirstOrDefaultAsync(ct);
-        if (existing is not null)
-            return Result<PaymentDto>.Fail(
-                $"A {existing.Status} payment already exists for this session.",
-                PaymentErrorCodes.DuplicatePaymentForSession);
+        // Disallow duplicate Pending/Paid payment for the same session or subscription.
+        if (hasSession)
+        {
+            var existing = await _db.Payments
+                .Find(x => x.ParkingSessionId == request.ParkingSessionId &&
+                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+                return Result<PaymentDto>.Fail(
+                    $"A {existing.Status} payment already exists for this session.",
+                    PaymentErrorCodes.DuplicatePaymentForSession);
+        }
+
+        if (hasSubscription)
+        {
+            var existing = await _db.Payments
+                .Find(x => x.SubscriptionId == request.SubscriptionId &&
+                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+                return Result<PaymentDto>.Fail(
+                    $"A {existing.Status} payment already exists for this subscription.",
+                    PaymentErrorCodes.DuplicatePaymentForSession);
+        }
 
         var entity = new Domain.Entities.Payment
         {
             Id = ObjectId.GenerateNewId().ToString(),
-            ParkingSessionId = request.ParkingSessionId,
+            ParkingSessionId = hasSession ? request.ParkingSessionId!.Trim() : null,
+            SubscriptionId = hasSubscription ? request.SubscriptionId!.Trim() : null,
             PlateNumber = request.PlateNumber.Trim().ToUpperInvariant(),
             VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
             ShiftId = string.IsNullOrWhiteSpace(request.ShiftId) ? null : request.ShiftId,
@@ -151,6 +178,7 @@ public class PaymentService : IPaymentService
     {
         Id = x.Id,
         ParkingSessionId = x.ParkingSessionId,
+        SubscriptionId = x.SubscriptionId,
         PlateNumber = x.PlateNumber,
         VehicleId = x.VehicleId,
         ShiftId = x.ShiftId,

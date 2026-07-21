@@ -5,6 +5,7 @@ using Parking.Application.Common;
 using Parking.Application.DTOs;
 using Parking.Application.DTOs.Vehicles;
 using Parking.Domain.Entities;
+using Parking.Domain.Enums;
 using Parking.Infrastructure.Persistence;
 
 namespace Parking.Infrastructure.Services;
@@ -52,9 +53,13 @@ public class VehicleService : IVehicleService
             .Limit(pageSize)
             .ToListAsync(ct);
 
+        var dtos = new List<VehicleDto>();
+        foreach (var item in items)
+            dtos.Add(await MapAsync(item));
+
         return Result<PagedResult<VehicleDto>>.Ok(new PagedResult<VehicleDto>
         {
-            Items = items.Select(Map).ToList(),
+            Items = dtos,
             Page = page,
             PageSize = pageSize,
             TotalCount = total
@@ -66,7 +71,7 @@ public class VehicleService : IVehicleService
         var entity = await _db.Vehicles.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (entity is null)
             return Result<VehicleDto>.Fail("Vehicle not found.", ParkingErrorCodes.VehicleNotFound);
-        return Result<VehicleDto>.Ok(Map(entity));
+        return Result<VehicleDto>.Ok(await MapAsync(entity));
     }
 
     public async Task<Result<VehicleDto>> GetByPlateAsync(string plateNumber, CancellationToken ct = default)
@@ -78,7 +83,7 @@ public class VehicleService : IVehicleService
         var entity = await _db.Vehicles.Find(x => x.PlateNumberNormalized == normalized).FirstOrDefaultAsync(ct);
         if (entity is null)
             return Result<VehicleDto>.Fail("Vehicle not found.", ParkingErrorCodes.VehicleNotFound);
-        return Result<VehicleDto>.Ok(Map(entity));
+        return Result<VehicleDto>.Ok(await MapAsync(entity));
     }
 
     public async Task<Result<VehicleDto>> CreateAsync(CreateVehicleRequest request, CancellationToken ct = default)
@@ -111,7 +116,7 @@ public class VehicleService : IVehicleService
         };
 
         await _db.Vehicles.InsertOneAsync(entity, cancellationToken: ct);
-        return Result<VehicleDto>.Ok(Map(entity));
+        return Result<VehicleDto>.Ok(await MapAsync(entity));
     }
 
     public async Task<Result<VehicleDto>> UpdateAsync(string id, UpdateVehicleRequest request, CancellationToken ct = default)
@@ -138,7 +143,7 @@ public class VehicleService : IVehicleService
 
         await _db.Vehicles.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
         var updated = await _db.Vehicles.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
-        return Result<VehicleDto>.Ok(Map(updated!));
+        return Result<VehicleDto>.Ok(await MapAsync(updated!));
     }
 
     public async Task<Result> DeleteAsync(string id, CancellationToken ct = default)
@@ -164,23 +169,28 @@ public class VehicleService : IVehicleService
     private static string Normalize(string plate) =>
         new string(plate.Where(c => c != ' ' && c != '-').ToArray()).ToUpperInvariant();
 
-    private static VehicleDto Map(Vehicle x) => new()
+    private async Task<VehicleDto> MapAsync(Vehicle x)
     {
-        Id = x.Id,
-        PlateNumber = x.PlateNumber,
-        PlateNumberNormalized = x.PlateNumberNormalized,
-        VehicleTypeId = x.VehicleTypeId,
-        OwnerUserId = x.OwnerUserId,
-        OwnerName = x.OwnerName,
-        OwnerPhone = x.OwnerPhone,
-        OwnerEmail = x.OwnerEmail,
-        Brand = x.Brand,
-        Model = x.Model,
-        Color = x.Color,
-        ActiveSubscriptionId = x.ActiveSubscriptionId,
-        Note = x.Note,
-        IsActive = x.IsActive,
-        CreatedAt = x.CreatedAt,
-        UpdatedAt = x.UpdatedAt
-    };
+        var vt = await _db.VehicleTypes.Find(t => t.Id == x.VehicleTypeId).FirstOrDefaultAsync();
+        return new VehicleDto
+        {
+            Id = x.Id,
+            PlateNumber = x.PlateNumber,
+            PlateNumberNormalized = x.PlateNumberNormalized,
+            VehicleTypeId = x.VehicleTypeId,
+            VehicleCategory = vt?.Category ?? VehicleCategory.Motorcycle,
+            OwnerUserId = x.OwnerUserId,
+            OwnerName = x.OwnerName,
+            OwnerPhone = x.OwnerPhone,
+            OwnerEmail = x.OwnerEmail,
+            Brand = x.Brand,
+            Model = x.Model,
+            Color = x.Color,
+            ActiveSubscriptionId = x.ActiveSubscriptionId,
+            Note = x.Note,
+            IsActive = x.IsActive,
+            CreatedAt = x.CreatedAt,
+            UpdatedAt = x.UpdatedAt
+        };
+    }
 }

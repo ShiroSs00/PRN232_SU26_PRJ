@@ -30,4 +30,12 @@ public class Subscription : AuditableEntity
     public DateTime? CancelledAt { get; set; }
 
     public string? Note { get; set; }
+
+    public string? CreatedByUserId { get; set; }
+
+    public string? ApprovedByUserId { get; set; }
+
+    public DateTime? ApprovedAt { get; set; }
+
+    public string? RejectionReason { get; set; }
 }
