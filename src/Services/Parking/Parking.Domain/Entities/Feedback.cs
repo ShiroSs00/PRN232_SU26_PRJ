@@ -17,8 +17,6 @@ public class Feedback : AuditableEntity
 
     public string? PlateNumber { get; set; }
 
-    public int Rating { get; set; }
-
     public FeedbackType Type { get; set; } = FeedbackType.Other;
 
     public string Content { get; set; } = string.Empty;

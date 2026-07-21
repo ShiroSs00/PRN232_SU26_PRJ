@@ -59,6 +59,16 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<List<PaymentDto>>.Ok(result.Value!));
     }
 
+    // Driver xem payment theo vé tháng.
+    [HttpGet("by-subscription/{subscriptionId}")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
+    [ProducesResponseType(typeof(ApiResponse<List<PaymentDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBySubscription(string subscriptionId, CancellationToken ct)
+    {
+        var result = await _payments.GetBySubscriptionAsync(subscriptionId, ct);
+        return Ok(ApiResponse<List<PaymentDto>>.Ok(result.Value!));
+    }
+
     // Driver có thể tạo payment cho phiên của mình.
     // Lưu ý: Payment là service riêng, không truy được Vehicle ở Parking nên
     // không enforce ownership chặt cross-service; Driver chỉ thao tác khi biết sessionId

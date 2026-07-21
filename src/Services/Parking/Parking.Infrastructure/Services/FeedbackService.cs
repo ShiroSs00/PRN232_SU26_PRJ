@@ -25,17 +25,12 @@ public class FeedbackService : IFeedbackService
         if (string.IsNullOrWhiteSpace(request.Content))
             return Result<FeedbackDto>.Fail("Nội dung phản hồi không được để trống.", ParkingErrorCodes.ValidationFailed);
 
-        var rating = request.Rating;
-        if (rating < 1) rating = 1;
-        if (rating > 5) rating = 5;
-
         var entity = new Feedback
         {
             UserId = userId,
             BuildingId = request.BuildingId,
             ParkingSessionId = request.ParkingSessionId,
             PlateNumber = request.PlateNumber?.Trim(),
-            Rating = rating,
             Type = Enum.IsDefined(typeof(FeedbackType), request.Type)
                 ? (FeedbackType)request.Type
                 : FeedbackType.Other,
@@ -116,7 +111,6 @@ public class FeedbackService : IFeedbackService
         BuildingId = x.BuildingId,
         ParkingSessionId = x.ParkingSessionId,
         PlateNumber = x.PlateNumber,
-        Rating = x.Rating,
         Type = x.Type,
         Content = x.Content,
         Status = x.Status,

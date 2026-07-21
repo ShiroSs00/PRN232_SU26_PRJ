@@ -80,6 +80,7 @@ public class VehicleTypeService : IVehicleTypeService
             Id = ObjectId.GenerateNewId().ToString(),
             Name = name,
             Description = request.Description?.Trim(),
+            Category = request.Category,
             CreatedAt = now,
             IsActive = true
         };
@@ -110,6 +111,7 @@ public class VehicleTypeService : IVehicleTypeService
         var update = Builders<VehicleType>.Update
             .Set(x => x.Name, name)
             .Set(x => x.Description, request.Description?.Trim())
+            .Set(x => x.Category, request.Category)
             .Set(x => x.IsActive, request.IsActive)
             .Set(x => x.UpdatedAt, DateTime.UtcNow);
 
@@ -136,6 +138,7 @@ public class VehicleTypeService : IVehicleTypeService
         Id = x.Id,
         Name = x.Name,
         Description = x.Description,
+        Category = x.Category,
         IsActive = x.IsActive,
         CreatedAt = x.CreatedAt,
         UpdatedAt = x.UpdatedAt

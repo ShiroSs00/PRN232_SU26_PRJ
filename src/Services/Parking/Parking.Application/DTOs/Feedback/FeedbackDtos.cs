@@ -9,7 +9,6 @@ public class FeedbackDto
     public string? BuildingId { get; set; }
     public string? ParkingSessionId { get; set; }
     public string? PlateNumber { get; set; }
-    public int Rating { get; set; }
     public FeedbackType Type { get; set; }
     public string Content { get; set; } = string.Empty;
     public FeedbackStatus Status { get; set; }
@@ -21,7 +20,6 @@ public class FeedbackDto
 
 public class CreateFeedbackRequest
 {
-    public int Rating { get; set; }
     public int Type { get; set; } = (int)FeedbackType.Other;
     public string Content { get; set; } = string.Empty;
     public string? BuildingId { get; set; }

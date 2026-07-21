@@ -6,7 +6,7 @@ namespace Parking.Application.Abstractions;
 
 public interface IZoneService
 {
-    Task<Result<PagedResult<ZoneDto>>> GetListAsync(string? buildingId, string? floorId, bool? isActive, int page, int pageSize, CancellationToken ct = default);
+    Task<Result<PagedResult<ZoneDto>>> GetListAsync(string? buildingId, string? floorId, string? vehicleTypeId, bool? isActive, int page, int pageSize, CancellationToken ct = default);
     Task<Result<ZoneDto>> GetByIdAsync(string id, CancellationToken ct = default);
     Task<Result<ZoneDto>> CreateAsync(CreateZoneRequest request, CancellationToken ct = default);
     Task<Result<ZoneDto>> UpdateAsync(string id, UpdateZoneRequest request, CancellationToken ct = default);

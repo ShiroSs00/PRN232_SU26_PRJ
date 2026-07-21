@@ -203,6 +203,122 @@ public class SubscriptionService : ISubscriptionService
         return null;
     }
 
+    public async Task<Result<PagedResult<SubscriptionDto>>> GetMySubscriptionsAsync(
+        string userId,
+        int? status,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 200) pageSize = 200;
+
+        var fb = Builders<Subscription>.Filter;
+        var filters = new List<FilterDefinition<Subscription>>
+        {
+            fb.Eq(x => x.CreatedByUserId, userId)
+        };
+        if (status.HasValue) filters.Add(fb.Eq(x => x.Status, (SubscriptionStatus)status.Value));
+
+        var filter = fb.And(filters);
+        var total = await _db.Subscriptions.CountDocumentsAsync(filter, cancellationToken: ct);
+
+        var items = await _db.Subscriptions.Find(filter)
+            .SortByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync(ct);
+
+        return Result<PagedResult<SubscriptionDto>>.Ok(new PagedResult<SubscriptionDto>
+        {
+            Items = items.Select(Map).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = total
+        });
+    }
+
+    public async Task<Result<SubscriptionDto>> RequestAsync(
+        CreateSubscriptionRequest request,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var validation = Validate(request.PlateNumber, request.VehicleTypeId, request.BuildingId, request.OwnerName,
+            request.OwnerPhone, request.MonthlyFee, request.StartDate, request.EndDate);
+        if (validation is not null)
+            return Result<SubscriptionDto>.Fail(validation, PaymentErrorCodes.ValidationFailed);
+
+        var entity = new Subscription
+        {
+            Id = ObjectId.GenerateNewId().ToString(),
+            PlateNumber = request.PlateNumber.Trim().ToUpperInvariant(),
+            VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
+            VehicleTypeId = request.VehicleTypeId,
+            BuildingId = request.BuildingId,
+            OwnerName = request.OwnerName.Trim(),
+            OwnerPhone = request.OwnerPhone.Trim(),
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            MonthlyFee = request.MonthlyFee,
+            Status = SubscriptionStatus.PendingApproval,
+            Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
+            CreatedByUserId = userId,
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        await _db.Subscriptions.InsertOneAsync(entity, cancellationToken: ct);
+        return Result<SubscriptionDto>.Ok(Map(entity));
+    }
+
+    public async Task<Result<SubscriptionDto>> ApproveAsync(
+        string id,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var entity = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (entity is null)
+            return Result<SubscriptionDto>.Fail("Subscription not found.", PaymentErrorCodes.SubscriptionNotFound);
+        if (entity.Status != SubscriptionStatus.PendingApproval)
+            return Result<SubscriptionDto>.Fail("Only pending subscriptions can be approved.", PaymentErrorCodes.ValidationFailed);
+
+        var now = DateTime.UtcNow;
+        var update = Builders<Subscription>.Update
+            .Set(x => x.Status, SubscriptionStatus.Active)
+            .Set(x => x.ApprovedByUserId, userId)
+            .Set(x => x.ApprovedAt, now)
+            .Set(x => x.RejectionReason, (string?)null)
+            .Set(x => x.UpdatedAt, now);
+
+        await _db.Subscriptions.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
+        var updated = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        return Result<SubscriptionDto>.Ok(Map(updated!));
+    }
+
+    public async Task<Result<SubscriptionDto>> RejectAsync(
+        string id,
+        string? reason,
+        CancellationToken ct = default)
+    {
+        var entity = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (entity is null)
+            return Result<SubscriptionDto>.Fail("Subscription not found.", PaymentErrorCodes.SubscriptionNotFound);
+        if (entity.Status != SubscriptionStatus.PendingApproval)
+            return Result<SubscriptionDto>.Fail("Only pending subscriptions can be rejected.", PaymentErrorCodes.ValidationFailed);
+
+        var now = DateTime.UtcNow;
+        var update = Builders<Subscription>.Update
+            .Set(x => x.Status, SubscriptionStatus.Cancelled)
+            .Set(x => x.CancelledAt, now)
+            .Set(x => x.RejectionReason, string.IsNullOrWhiteSpace(reason) ? null : reason.Trim())
+            .Set(x => x.UpdatedAt, now);
+
+        await _db.Subscriptions.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
+        var updated = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        return Result<SubscriptionDto>.Ok(Map(updated!));
+    }
+
     private static SubscriptionDto Map(Subscription x) => new()
     {
         Id = x.Id,
@@ -219,6 +335,10 @@ public class SubscriptionService : ISubscriptionService
         SuspendedAt = x.SuspendedAt,
         CancelledAt = x.CancelledAt,
         Note = x.Note,
+        CreatedByUserId = x.CreatedByUserId,
+        ApprovedByUserId = x.ApprovedByUserId,
+        ApprovedAt = x.ApprovedAt,
+        RejectionReason = x.RejectionReason,
         CreatedAt = x.CreatedAt,
         UpdatedAt = x.UpdatedAt
     };

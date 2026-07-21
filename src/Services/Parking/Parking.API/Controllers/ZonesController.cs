@@ -25,12 +25,13 @@ public class ZonesController : ControllerBase
     public async Task<IActionResult> GetList(
         [FromQuery] string? buildingId,
         [FromQuery] string? floorId,
+        [FromQuery] string? vehicleTypeId,
         [FromQuery] bool? isActive,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var result = await _service.GetListAsync(buildingId, floorId, isActive, page, pageSize, ct);
+        var result = await _service.GetListAsync(buildingId, floorId, vehicleTypeId, isActive, page, pageSize, ct);
         return Ok(ApiResponse<PagedResult<ZoneDto>>.Ok(result.Value!));
     }
 
