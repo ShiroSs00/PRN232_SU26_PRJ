@@ -17,17 +17,20 @@ public class ParkingSessionService : IParkingSessionService
     private readonly IParkingMapNotifier _notifier;
     private readonly ISlotAllocationService _slotAllocation;
     private readonly IFeeCalculationClient _feeCalculation;
+    private readonly ISubscriptionCheckClient _subCheck;
 
     public ParkingSessionService(
         MongoDbContext db,
         IParkingMapNotifier notifier,
         ISlotAllocationService slotAllocation,
-        IFeeCalculationClient feeCalculation)
+        IFeeCalculationClient feeCalculation,
+        ISubscriptionCheckClient subCheck)
     {
         _db = db;
         _notifier = notifier;
         _slotAllocation = slotAllocation;
         _feeCalculation = feeCalculation;
+        _subCheck = subCheck;
     }
 
     public async Task<Result<PagedResult<ParkingSessionDto>>> GetListAsync(
@@ -155,7 +158,15 @@ public class ParkingSessionService : IParkingSessionService
 
         var plate = PlateNumberNormalizer.Normalize(request.PlateNumber);
 
-        // 1. Reject if an Active session already exists for this plate.
+        // 1. Zone Capacity Check
+        var zone = await _db.Zones.Find(x => x.Id == request.ZoneId.Trim()).FirstOrDefaultAsync(ct);
+        if (zone is null)
+            return Result<ParkingSessionDto>.Fail("Zone not found.", ParkingErrorCodes.ZoneNotFound);
+
+        if (zone.CurrentOccupancy >= zone.Capacity)
+            return Result<ParkingSessionDto>.Fail("Zone is at maximum capacity.", ParkingErrorCodes.ZoneFull);
+
+        // 2. Reject if an Active session already exists for this plate.
         var existing = await _db.ParkingSessions
             .Find(x => x.PlateNumber == plate && x.Status == ParkingSessionStatus.Active)
             .AnyAsync(ct);
@@ -163,6 +174,23 @@ public class ParkingSessionService : IParkingSessionService
             return Result<ParkingSessionDto>.Fail(
                 "An active session already exists for this plate number.",
                 ParkingErrorCodes.ActiveSessionExists);
+
+        // 3. Monthly Subscription Check & Auto-Detection
+        var activeSub = await _subCheck.GetActiveByPlateAsync(plate, ct);
+        var isMonthly = request.IsMonthly;
+        string? subscriptionId = request.SubscriptionId?.Trim();
+
+        if (activeSub != null)
+        {
+            isMonthly = true;
+            subscriptionId ??= activeSub.Id;
+        }
+        else if (request.IsMonthly)
+        {
+            return Result<ParkingSessionDto>.Fail(
+                "No active monthly subscription found for this plate number.",
+                ParkingErrorCodes.InvalidSubscription);
+        }
 
         // If checking in against a reservation, load it and validate.
         Reservation? reservation = null;
@@ -177,118 +205,143 @@ public class ParkingSessionService : IParkingSessionService
                     ParkingErrorCodes.InvalidReservationStatus);
         }
 
-        // 2. Select a slot. A reserved slot belonging to the supplied reservation is acceptable;
-        //    otherwise the slot must be Available.
-        ParkingSlot? slot;
-        var explicitSlotId = request.ParkingSlotId ?? reservation?.ParkingSlotId;
-        if (!string.IsNullOrWhiteSpace(explicitSlotId))
-        {
-            slot = await _db.ParkingSlots.Find(x => x.Id == explicitSlotId).FirstOrDefaultAsync(ct);
-            if (slot is null)
-                return Result<ParkingSessionDto>.Fail("Parking slot not found.", ParkingErrorCodes.SlotNotFound);
-
-            var reservedForThis = slot.Status == SlotStatus.Reserved
-                && reservation is not null
-                && reservation.ParkingSlotId == slot.Id;
-            if (slot.Status != SlotStatus.Available && !reservedForThis)
-                return Result<ParkingSessionDto>.Fail("The requested slot is not available.", ParkingErrorCodes.SlotNotAvailable);
-
-            if (!string.IsNullOrWhiteSpace(slot.VehicleTypeId)
-                && slot.VehicleTypeId != request.VehicleTypeId.Trim())
-                return Result<ParkingSessionDto>.Fail(
-                    "The slot does not match the vehicle type.",
-                    ParkingErrorCodes.ValidationFailed);
-        }
-        else
-        {
-            // Auto-chọn slot bằng thuật toán tối ưu (khoảng cách lối vào, cân bằng tải, gọn khối)
-            // thay cho first-free trước đây.
-            var pick = await _slotAllocation.PickBestSlotIdAsync(
-                request.ZoneId, request.VehicleTypeId.Trim(), ct);
-            if (!pick.Success)
-                return Result<ParkingSessionDto>.Fail(pick.Error!, pick.ErrorCode!);
-
-            slot = await _db.ParkingSlots.Find(x => x.Id == pick.Value).FirstOrDefaultAsync(ct);
-            if (slot is null)
-                return Result<ParkingSessionDto>.Fail("No available slot in the requested zone.", ParkingErrorCodes.NoAvailableSlot);
-        }
-
+        // 4. Select a slot with atomic occupation retry loop
+        ParkingSlot? slot = null;
         var now = DateTime.UtcNow;
 
-        // 3. Create session.
-        var session = new ParkingSession
+        const int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            Id = ObjectId.GenerateNewId().ToString(),
-            PlateNumber = plate,
-            VehicleTypeId = request.VehicleTypeId.Trim(),
-            BuildingId = request.BuildingId.Trim(),
-            ZoneId = request.ZoneId.Trim(),
-            ParkingSlotId = slot.Id,
-            ReservationId = reservation?.Id,
-            CheckInTime = now,
-            EntryGate = request.EntryGate?.Trim(),
-            CheckInNote = request.CheckInNote?.Trim(),
-            Status = ParkingSessionStatus.Active,
-            IsMonthly = request.IsMonthly,
-            SubscriptionId = request.SubscriptionId?.Trim(),
-            CreatedByUserId = userId ?? string.Empty,
-            CreatedAt = now
-        };
-        await _db.ParkingSessions.InsertOneAsync(session, cancellationToken: ct);
-
-        // Occupy the slot.
-        var slotUpdate = Builders<ParkingSlot>.Update
-            .Set(x => x.Status, SlotStatus.Occupied)
-            .Set(x => x.CurrentSessionId, session.Id)
-            .Set(x => x.UpdatedAt, now);
-        await _db.ParkingSlots.UpdateOneAsync(x => x.Id == slot.Id, slotUpdate, cancellationToken: ct);
-
-        // Increment zone occupancy.
-        await _db.Zones.UpdateOneAsync(
-            x => x.Id == session.ZoneId,
-            Builders<Zone>.Update.Inc(x => x.CurrentOccupancy, 1).Set(x => x.UpdatedAt, now),
-            cancellationToken: ct);
-
-        // If from a reservation, mark it checked-in and link the session.
-        if (reservation is not null)
-        {
-            await _db.Reservations.UpdateOneAsync(
-                x => x.Id == reservation.Id,
-                Builders<Reservation>.Update
-                    .Set(x => x.Status, ReservationStatus.CheckedIn)
-                    .Set(x => x.ParkingSessionId, session.Id)
-                    .Set(x => x.UpdatedAt, now),
-                cancellationToken: ct);
-
-            // If the reservation had reserved a different slot than the one actually used,
-            // release that reserved slot so it does not stay stuck in Reserved.
-            if (!string.IsNullOrWhiteSpace(reservation.ParkingSlotId)
-                && reservation.ParkingSlotId != slot.Id)
+            var explicitSlotId = request.ParkingSlotId ?? reservation?.ParkingSlotId;
+            if (!string.IsNullOrWhiteSpace(explicitSlotId))
             {
-                var oldReserved = await _db.ParkingSlots
-                    .Find(x => x.Id == reservation.ParkingSlotId)
-                    .FirstOrDefaultAsync(ct);
-                if (oldReserved is not null && oldReserved.Status == SlotStatus.Reserved)
+                slot = await _db.ParkingSlots.Find(x => x.Id == explicitSlotId).FirstOrDefaultAsync(ct);
+                if (slot is null)
+                    return Result<ParkingSessionDto>.Fail("Parking slot not found.", ParkingErrorCodes.SlotNotFound);
+
+                var reservedForThis = slot.Status == SlotStatus.Reserved
+                    && reservation is not null
+                    && reservation.ParkingSlotId == slot.Id;
+                if (slot.Status != SlotStatus.Available && !reservedForThis)
+                    return Result<ParkingSessionDto>.Fail("The requested slot is not available.", ParkingErrorCodes.SlotNotAvailable);
+
+                if (!string.IsNullOrWhiteSpace(slot.VehicleTypeId)
+                    && slot.VehicleTypeId != request.VehicleTypeId.Trim())
+                    return Result<ParkingSessionDto>.Fail(
+                        "The slot does not match the vehicle type.",
+                        ParkingErrorCodes.ValidationFailed);
+            }
+            else
+            {
+                var pick = await _slotAllocation.PickBestSlotIdAsync(
+                    request.ZoneId, request.VehicleTypeId.Trim(), ct);
+                if (!pick.Success)
+                    return Result<ParkingSessionDto>.Fail(pick.Error!, pick.ErrorCode!);
+
+                slot = await _db.ParkingSlots.Find(x => x.Id == pick.Value).FirstOrDefaultAsync(ct);
+                if (slot is null)
+                    return Result<ParkingSessionDto>.Fail("No available slot in the requested zone.", ParkingErrorCodes.NoAvailableSlot);
+            }
+
+            // Atomic update check: Only claim slot if its status is still Available or Reserved (for reservation)
+            var allowedStatuses = new List<SlotStatus> { SlotStatus.Available };
+            if (reservation is not null && reservation.ParkingSlotId == slot.Id)
+                allowedStatuses.Add(SlotStatus.Reserved);
+
+            var tempSessionId = ObjectId.GenerateNewId().ToString();
+            var slotFilter = Builders<ParkingSlot>.Filter.And(
+                Builders<ParkingSlot>.Filter.Eq(x => x.Id, slot.Id),
+                Builders<ParkingSlot>.Filter.In(x => x.Status, allowedStatuses));
+
+            var slotUpdate = Builders<ParkingSlot>.Update
+                .Set(x => x.Status, SlotStatus.Occupied)
+                .Set(x => x.CurrentSessionId, tempSessionId)
+                .Set(x => x.UpdatedAt, now);
+
+            var updateResult = await _db.ParkingSlots.UpdateOneAsync(slotFilter, slotUpdate, cancellationToken: ct);
+            if (updateResult.ModifiedCount > 0)
+            {
+                // Atomically claimed the slot! Now insert session.
+                var session = new ParkingSession
                 {
-                    await _db.ParkingSlots.UpdateOneAsync(
-                        x => x.Id == oldReserved.Id,
-                        Builders<ParkingSlot>.Update
-                            .Set(x => x.Status, SlotStatus.Available)
+                    Id = tempSessionId,
+                    PlateNumber = plate,
+                    VehicleTypeId = request.VehicleTypeId.Trim(),
+                    BuildingId = request.BuildingId.Trim(),
+                    ZoneId = request.ZoneId.Trim(),
+                    ParkingSlotId = slot.Id,
+                    ReservationId = reservation?.Id,
+                    CheckInTime = now,
+                    EntryGate = request.EntryGate?.Trim(),
+                    CheckInNote = request.CheckInNote?.Trim(),
+                    Status = ParkingSessionStatus.Active,
+                    IsMonthly = isMonthly,
+                    SubscriptionId = subscriptionId,
+                    CreatedByUserId = userId ?? string.Empty,
+                    CreatedAt = now
+                };
+                await _db.ParkingSessions.InsertOneAsync(session, cancellationToken: ct);
+
+                // Increment zone occupancy.
+                await _db.Zones.UpdateOneAsync(
+                    x => x.Id == session.ZoneId,
+                    Builders<Zone>.Update.Inc(x => x.CurrentOccupancy, 1).Set(x => x.UpdatedAt, now),
+                    cancellationToken: ct);
+
+                // If from a reservation, mark it checked-in and link the session.
+                if (reservation is not null)
+                {
+                    await _db.Reservations.UpdateOneAsync(
+                        x => x.Id == reservation.Id,
+                        Builders<Reservation>.Update
+                            .Set(x => x.Status, ReservationStatus.CheckedIn)
+                            .Set(x => x.ParkingSessionId, session.Id)
                             .Set(x => x.UpdatedAt, now),
                         cancellationToken: ct);
-                    await NotifyAsync(oldReserved, SlotStatus.Available, null, ct);
+
+                    if (!string.IsNullOrWhiteSpace(reservation.ParkingSlotId)
+                        && reservation.ParkingSlotId != slot.Id)
+                    {
+                        var oldReserved = await _db.ParkingSlots
+                            .Find(x => x.Id == reservation.ParkingSlotId)
+                            .FirstOrDefaultAsync(ct);
+                        if (oldReserved is not null && oldReserved.Status == SlotStatus.Reserved)
+                        {
+                            await _db.ParkingSlots.UpdateOneAsync(
+                                x => x.Id == oldReserved.Id,
+                                Builders<ParkingSlot>.Update
+                                    .Set(x => x.Status, SlotStatus.Available)
+                                    .Set(x => x.UpdatedAt, now),
+                                cancellationToken: ct);
+                            await NotifyAsync(oldReserved, SlotStatus.Available, null, ct);
+                        }
+                    }
                 }
+
+                // Log.
+                await WriteLogAsync(session.Id, ParkingSessionLogAction.CheckIn, null, slot.Id,
+                    $"Check-in plate {plate} into slot {slot.Code}.", userId, now, ct);
+
+                // Notify realtime.
+                await NotifyAsync(slot, SlotStatus.Occupied, BuildOccupyingVehicle(session), ct);
+
+                return Result<ParkingSessionDto>.Ok(Map(session));
             }
+
+            // If an explicit slot was requested and atomic update failed, reject immediately.
+            if (!string.IsNullOrWhiteSpace(request.ParkingSlotId) || reservation != null)
+            {
+                return Result<ParkingSessionDto>.Fail(
+                    "The requested slot was taken by another vehicle.",
+                    ParkingErrorCodes.SlotNotAvailable);
+            }
+
+            // Retry auto-allocation if race condition happened.
         }
 
-        // 4. Log.
-        await WriteLogAsync(session.Id, ParkingSessionLogAction.CheckIn, null, slot.Id,
-            $"Check-in plate {plate} into slot {slot.Code}.", userId, now, ct);
-
-        // 5. Notify realtime.
-        await NotifyAsync(slot, SlotStatus.Occupied, BuildOccupyingVehicle(session), ct);
-
-        return Result<ParkingSessionDto>.Ok(Map(session));
+        return Result<ParkingSessionDto>.Fail(
+            "Failed to allocate slot due to concurrent check-ins. Please try again.",
+            ParkingErrorCodes.NoAvailableSlot);
     }
 
     public async Task<Result<ParkingSessionDto>> CheckOutAsync(

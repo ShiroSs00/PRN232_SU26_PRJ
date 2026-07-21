@@ -30,6 +30,8 @@ public static class ParkingErrorCodes
     public const string SessionNotActive = "SESSION_NOT_ACTIVE";
     public const string NoAvailableSlot = "NO_AVAILABLE_SLOT";
     public const string SessionAccessDenied = "SESSION_ACCESS_DENIED";
+    public const string ZoneFull = "ZONE_FULL";
+    public const string InvalidSubscription = "INVALID_SUBSCRIPTION";
 
     // Incident
     public const string IncidentNotFound = "INCIDENT_NOT_FOUND";

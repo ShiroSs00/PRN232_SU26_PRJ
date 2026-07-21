@@ -213,6 +213,8 @@ public class ParkingSessionsController : ControllerBase
             ParkingErrorCodes.SlotNotAvailable => StatusCodes.Status409Conflict,
             ParkingErrorCodes.NoAvailableSlot => StatusCodes.Status409Conflict,
             ParkingErrorCodes.SessionNotActive => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.ZoneFull => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.InvalidSubscription => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status400BadRequest
         };
         return StatusCode(status, ApiResponse.Fail(result.Error!));

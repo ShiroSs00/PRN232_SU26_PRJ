@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<IOptimizationService, OptimizationService>();
         services.AddHttpClient<IGeminiClient, GeminiClient>();
         services.AddHttpClient<IFeeCalculationClient, FeeCalculationClient>();
+        services.AddHttpClient<ISubscriptionCheckClient, SubscriptionCheckClient>();
 
         return services;
     }
