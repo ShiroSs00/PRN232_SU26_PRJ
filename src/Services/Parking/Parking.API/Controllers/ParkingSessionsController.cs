@@ -109,19 +109,33 @@ public class ParkingSessionsController : ControllerBase
 
     [HttpPost("{id}/check-out")]
     [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
-    [ProducesResponseType(typeof(ApiResponse<ParkingSessionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<CheckoutResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CheckOut(
+    public async Task<IActionResult> PrepareCheckOut(
         string id,
         [FromBody] CheckOutRequest request,
         CancellationToken ct)
     {
-        var result = await _service.CheckOutAsync(id, request, GetUserId(), ct);
+        var result = await _service.PrepareCheckOutAsync(id, request, GetUserId(), ct);
         if (!result.Success)
-            return MapError(result);
-        return Ok(ApiResponse<ParkingSessionDto>.Ok(result.Value!, "Checked out."));
+            return MapCheckoutError(result);
+        return Ok(ApiResponse<CheckoutResponse>.Ok(result.Value!, "Checkout prepared."));
+    }
+
+    [HttpPost("{id}/finalize-check-out")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+    [ProducesResponseType(typeof(ApiResponse<CheckoutResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> FinalizeCheckOut(string id, CancellationToken ct)
+    {
+        var result = await _service.FinalizeCheckOutAsync(id, GetUserId(), ct);
+        if (!result.Success)
+            return MapCheckoutError(result);
+        return Ok(ApiResponse<CheckoutResponse>.Ok(result.Value!, "Checkout finalized."));
     }
 
     [HttpPost("{id}/change-slot")]
@@ -201,6 +215,22 @@ public class ParkingSessionsController : ControllerBase
             return StatusCode(status, ApiResponse.Fail(result.Error!));
         }
         return Ok(ApiResponse<EstimateFeeResponse>.Ok(result.Value!));
+    }
+
+    private IActionResult MapCheckoutError(Result<CheckoutResponse> result)
+    {
+        var status = result.ErrorCode switch
+        {
+            ParkingErrorCodes.SessionNotFound => StatusCodes.Status404NotFound,
+            ParkingErrorCodes.PaymentNotFound => StatusCodes.Status404NotFound,
+            ParkingErrorCodes.SessionNotActive => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.PaymentNotPaid => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.PaymentMismatch => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.PaymentRequired => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.PaymentServiceUnavailable => StatusCodes.Status502BadGateway,
+            _ => StatusCodes.Status400BadRequest
+        };
+        return StatusCode(status, ApiResponse.Fail(result.Error!));
     }
 
     private IActionResult MapError(Result<ParkingSessionDto> result)

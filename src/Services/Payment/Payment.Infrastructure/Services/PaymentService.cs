@@ -80,49 +80,59 @@ public class PaymentService : IPaymentService
 
     public async Task<Result<PaymentDto>> CreateAsync(string createdByUserId, CreatePaymentRequest request, CancellationToken ct = default)
     {
-        var hasSession = !string.IsNullOrWhiteSpace(request.ParkingSessionId);
-        var hasSubscription = !string.IsNullOrWhiteSpace(request.SubscriptionId);
+        var sessionId = string.IsNullOrWhiteSpace(request.ParkingSessionId)
+            ? null
+            : request.ParkingSessionId.Trim();
+        var subscriptionId = string.IsNullOrWhiteSpace(request.SubscriptionId)
+            ? null
+            : request.SubscriptionId.Trim();
 
-        if (!hasSession && !hasSubscription)
-            return Result<PaymentDto>.Fail("ParkingSessionId or SubscriptionId is required.", PaymentErrorCodes.ValidationFailed);
+        if ((sessionId is null) == (subscriptionId is null))
+            return Result<PaymentDto>.Fail(
+                "Exactly one of ParkingSessionId or SubscriptionId is required.",
+                PaymentErrorCodes.ValidationFailed);
         if (string.IsNullOrWhiteSpace(request.PlateNumber))
             return Result<PaymentDto>.Fail("PlateNumber is required.", PaymentErrorCodes.ValidationFailed);
         if (request.Amount <= 0)
             return Result<PaymentDto>.Fail("Amount must be positive.", PaymentErrorCodes.ValidationFailed);
+        if (!Enum.IsDefined(request.Method))
+            return Result<PaymentDto>.Fail("Payment method is invalid.", PaymentErrorCodes.InvalidPaymentMethod);
 
-        // Disallow duplicate Pending/Paid payment for the same session or subscription.
-        if (hasSession)
+        var plate = request.PlateNumber.Trim().ToUpperInvariant();
+        Domain.Entities.Payment? existing;
+        if (sessionId is not null)
         {
-            var existing = await _db.Payments
-                .Find(x => x.ParkingSessionId == request.ParkingSessionId &&
+            existing = await _db.Payments
+                .Find(x => x.ParkingSessionId == sessionId &&
                            (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
                 .FirstOrDefaultAsync(ct);
-            if (existing is not null)
-                return Result<PaymentDto>.Fail(
-                    $"A {existing.Status} payment already exists for this session.",
-                    PaymentErrorCodes.DuplicatePaymentForSession);
+        }
+        else
+        {
+            existing = await _db.Payments
+                .Find(x => x.SubscriptionId == subscriptionId &&
+                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
+                .FirstOrDefaultAsync(ct);
         }
 
-        if (hasSubscription)
+        if (existing is not null)
         {
-            var existing = await _db.Payments
-                .Find(x => x.SubscriptionId == request.SubscriptionId &&
-                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
-                .FirstOrDefaultAsync(ct);
-            if (existing is not null)
+            if (existing.Amount != request.Amount || existing.PlateNumber != plate)
                 return Result<PaymentDto>.Fail(
-                    $"A {existing.Status} payment already exists for this subscription.",
+                    "An existing payment for this source has different immutable details.",
                     PaymentErrorCodes.DuplicatePaymentForSession);
+
+            return Result<PaymentDto>.Ok(Map(existing));
         }
 
         var entity = new Domain.Entities.Payment
         {
             Id = ObjectId.GenerateNewId().ToString(),
-            ParkingSessionId = hasSession ? request.ParkingSessionId!.Trim() : null,
-            SubscriptionId = hasSubscription ? request.SubscriptionId!.Trim() : null,
-            PlateNumber = request.PlateNumber.Trim().ToUpperInvariant(),
-            VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
-            ShiftId = string.IsNullOrWhiteSpace(request.ShiftId) ? null : request.ShiftId,
+            ParkingSessionId = sessionId,
+            SubscriptionId = subscriptionId,
+            PlateNumber = plate,
+            VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId.Trim(),
+            ShiftId = string.IsNullOrWhiteSpace(request.ShiftId) ? null : request.ShiftId.Trim(),
             CreatedByUserId = createdByUserId,
             Amount = request.Amount,
             Method = request.Method,

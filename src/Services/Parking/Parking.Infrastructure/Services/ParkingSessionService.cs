@@ -18,19 +18,22 @@ public class ParkingSessionService : IParkingSessionService
     private readonly ISlotAllocationService _slotAllocation;
     private readonly IFeeCalculationClient _feeCalculation;
     private readonly ISubscriptionCheckClient _subCheck;
+    private readonly IPaymentClient _paymentClient;
 
     public ParkingSessionService(
         MongoDbContext db,
         IParkingMapNotifier notifier,
         ISlotAllocationService slotAllocation,
         IFeeCalculationClient feeCalculation,
-        ISubscriptionCheckClient subCheck)
+        ISubscriptionCheckClient subCheck,
+        IPaymentClient paymentClient)
     {
         _db = db;
         _notifier = notifier;
         _slotAllocation = slotAllocation;
         _feeCalculation = feeCalculation;
         _subCheck = subCheck;
+        _paymentClient = paymentClient;
     }
 
     public async Task<Result<PagedResult<ParkingSessionDto>>> GetListAsync(
@@ -344,19 +347,35 @@ public class ParkingSessionService : IParkingSessionService
             ParkingErrorCodes.NoAvailableSlot);
     }
 
-    public async Task<Result<ParkingSessionDto>> CheckOutAsync(
+    public async Task<Result<CheckoutResponse>> PrepareCheckOutAsync(
         string id,
         CheckOutRequest request,
         string userId,
         CancellationToken ct = default)
     {
+        if (request.PaymentMethod is < 1 or > 4)
+            return Result<CheckoutResponse>.Fail(
+                "Payment method is invalid.",
+                ParkingErrorCodes.ValidationFailed);
+
         var session = await _db.ParkingSessions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (session is null)
-            return Result<ParkingSessionDto>.Fail("Parking session not found.", ParkingErrorCodes.SessionNotFound);
+            return Result<CheckoutResponse>.Fail("Parking session not found.", ParkingErrorCodes.SessionNotFound);
+        if (session.Status is ParkingSessionStatus.Completed or ParkingSessionStatus.LostTicket)
+            return Result<CheckoutResponse>.Ok(BuildCheckoutResponse(session, null, true));
         if (session.Status != ParkingSessionStatus.Active)
-            return Result<ParkingSessionDto>.Fail("Session is not active.", ParkingErrorCodes.SessionNotActive);
+            return Result<CheckoutResponse>.Fail("Session is not active.", ParkingErrorCodes.SessionNotActive);
 
-        var now = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(session.PaymentId))
+        {
+            var existingPayment = await _paymentClient.GetByIdAsync(session.PaymentId, ct);
+            if (!existingPayment.Success)
+                return Result<CheckoutResponse>.Fail(existingPayment.Error!, existingPayment.ErrorCode!);
+            return Result<CheckoutResponse>.Ok(
+                BuildCheckoutResponse(session, existingPayment.Value, false));
+        }
+
+        var checkoutTime = session.CheckOutTime ?? DateTime.UtcNow;
         var totalFee = 0m;
         if (!session.IsMonthly || request.IsLostTicket)
         {
@@ -364,63 +383,193 @@ public class ParkingSessionService : IParkingSessionService
                 session.BuildingId,
                 session.VehicleTypeId,
                 session.CheckInTime,
-                now,
+                checkoutTime,
                 request.IsLostTicket,
                 ct);
             if (!feeResult.Success)
-                return Result<ParkingSessionDto>.Fail(feeResult.Error!, feeResult.ErrorCode!);
+                return Result<CheckoutResponse>.Fail(feeResult.Error!, feeResult.ErrorCode!);
 
             totalFee = feeResult.Value!.Amount;
             if (totalFee < 0)
-                return Result<ParkingSessionDto>.Fail("Calculated fee must be non-negative.", ParkingErrorCodes.ValidationFailed);
+                return Result<CheckoutResponse>.Fail(
+                    "Calculated fee must be non-negative.",
+                    ParkingErrorCodes.ValidationFailed);
         }
 
-        var sessionUpdate = Builders<ParkingSession>.Update
-            .Set(x => x.CheckOutTime, now)
-            .Set(x => x.Status, request.IsLostTicket
-                ? ParkingSessionStatus.LostTicket
-                : ParkingSessionStatus.Completed)
+        ParkingPaymentDto? payment = null;
+        if (totalFee > 0)
+        {
+            var paymentResult = await _paymentClient.CreateForParkingSessionAsync(
+                new CreateParkingPaymentCommand
+                {
+                    ParkingSessionId = session.Id,
+                    PlateNumber = session.PlateNumber,
+                    VehicleId = session.VehicleId,
+                    Amount = totalFee,
+                    Method = request.PaymentMethod,
+                    ShiftId = null
+                },
+                ct);
+            if (!paymentResult.Success)
+                return Result<CheckoutResponse>.Fail(paymentResult.Error!, paymentResult.ErrorCode!);
+            payment = paymentResult.Value!;
+        }
+
+        var preparationUpdate = Builders<ParkingSession>.Update
+            .Set(x => x.CheckOutTime, checkoutTime)
             .Set(x => x.TotalFee, totalFee)
             .Set(x => x.ExitGate, request.ExitGate?.Trim())
             .Set(x => x.CheckOutNote, request.CheckOutNote?.Trim())
-            .Set(x => x.PaymentId, request.PaymentId?.Trim())
-            .Set(x => x.CompletedByUserId, userId ?? string.Empty)
-            .Set(x => x.UpdatedAt, now);
-        await _db.ParkingSessions.UpdateOneAsync(x => x.Id == id, sessionUpdate, cancellationToken: ct);
+            .Set(x => x.IsLostTicket, request.IsLostTicket)
+            .Set(x => x.PaymentId, payment?.Id)
+            .Set(x => x.ShiftId, payment?.ShiftId)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
 
-        // Free the slot.
-        var slot = await _db.ParkingSlots.Find(x => x.Id == session.ParkingSlotId).FirstOrDefaultAsync(ct);
+        await _db.ParkingSessions.UpdateOneAsync(
+            x => x.Id == id && x.Status == ParkingSessionStatus.Active && x.PaymentId == null,
+            preparationUpdate,
+            cancellationToken: ct);
+
+        var prepared = await _db.ParkingSessions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (prepared is null)
+            return Result<CheckoutResponse>.Fail("Parking session not found.", ParkingErrorCodes.SessionNotFound);
+
+        if (prepared.PaymentId != payment?.Id && !string.IsNullOrWhiteSpace(prepared.PaymentId))
+        {
+            var concurrentPayment = await _paymentClient.GetByIdAsync(prepared.PaymentId, ct);
+            if (!concurrentPayment.Success)
+                return Result<CheckoutResponse>.Fail(concurrentPayment.Error!, concurrentPayment.ErrorCode!);
+            payment = concurrentPayment.Value;
+        }
+
+        if (prepared.TotalFee == 0)
+            return await CompleteSessionAsync(prepared, userId, null, ct);
+
+        return Result<CheckoutResponse>.Ok(BuildCheckoutResponse(prepared, payment, false));
+    }
+
+    public async Task<Result<CheckoutResponse>> FinalizeCheckOutAsync(
+        string id,
+        string userId,
+        CancellationToken ct = default)
+    {
+        var session = await _db.ParkingSessions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
+        if (session is null)
+            return Result<CheckoutResponse>.Fail("Parking session not found.", ParkingErrorCodes.SessionNotFound);
+        if (session.Status is ParkingSessionStatus.Completed or ParkingSessionStatus.LostTicket)
+            return Result<CheckoutResponse>.Ok(BuildCheckoutResponse(session, null, true));
+        if (session.Status != ParkingSessionStatus.Active)
+            return Result<CheckoutResponse>.Fail("Session is not active.", ParkingErrorCodes.SessionNotActive);
+        if (string.IsNullOrWhiteSpace(session.PaymentId))
+            return Result<CheckoutResponse>.Fail(
+                "Checkout has no payment to finalize.",
+                ParkingErrorCodes.PaymentRequired);
+
+        var paymentResult = await _paymentClient.GetByIdAsync(session.PaymentId, ct);
+        if (!paymentResult.Success)
+            return Result<CheckoutResponse>.Fail(paymentResult.Error!, paymentResult.ErrorCode!);
+
+        var payment = paymentResult.Value!;
+        if (payment.Status != ParkingPaymentStatus.Paid)
+            return Result<CheckoutResponse>.Fail(
+                "Payment must be Paid before checkout can be finalized.",
+                ParkingErrorCodes.PaymentNotPaid);
+
+        if (!CheckoutPaymentValidator.Matches(
+                payment,
+                session.Id,
+                session.PlateNumber,
+                session.TotalFee))
+            return Result<CheckoutResponse>.Fail(
+                "Payment does not match this parking session.",
+                ParkingErrorCodes.PaymentMismatch);
+
+        return await CompleteSessionAsync(session, userId, payment, ct);
+    }
+
+    private async Task<Result<CheckoutResponse>> CompleteSessionAsync(
+        ParkingSession session,
+        string userId,
+        ParkingPaymentDto? payment,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var terminalStatus = session.IsLostTicket
+            ? ParkingSessionStatus.LostTicket
+            : ParkingSessionStatus.Completed;
+        var sessionUpdate = Builders<ParkingSession>.Update
+            .Set(x => x.Status, terminalStatus)
+            .Set(x => x.CompletedByUserId, userId)
+            .Set(x => x.UpdatedAt, now);
+        var sessionResult = await _db.ParkingSessions.UpdateOneAsync(
+            x => x.Id == session.Id && x.Status == ParkingSessionStatus.Active,
+            sessionUpdate,
+            cancellationToken: ct);
+
+        if (sessionResult.ModifiedCount == 0)
+        {
+            var current = await _db.ParkingSessions.Find(x => x.Id == session.Id).FirstOrDefaultAsync(ct);
+            if (current is not null && current.Status is ParkingSessionStatus.Completed or ParkingSessionStatus.LostTicket)
+                return Result<CheckoutResponse>.Ok(BuildCheckoutResponse(current, payment, true));
+            return Result<CheckoutResponse>.Fail(
+                "Session is not active.",
+                ParkingErrorCodes.SessionNotActive);
+        }
+
+        var slot = await _db.ParkingSlots
+            .Find(x => x.Id == session.ParkingSlotId)
+            .FirstOrDefaultAsync(ct);
         if (slot is not null)
         {
             var slotUpdate = Builders<ParkingSlot>.Update
                 .Set(x => x.Status, SlotStatus.Available)
                 .Set(x => x.CurrentSessionId, (string?)null)
                 .Set(x => x.UpdatedAt, now);
-            await _db.ParkingSlots.UpdateOneAsync(x => x.Id == slot.Id, slotUpdate, cancellationToken: ct);
+            await _db.ParkingSlots.UpdateOneAsync(
+                x => x.Id == slot.Id && x.CurrentSessionId == session.Id,
+                slotUpdate,
+                cancellationToken: ct);
         }
 
-        // Decrement zone occupancy.
         await _db.Zones.UpdateOneAsync(
-            x => x.Id == session.ZoneId,
-            Builders<Zone>.Update.Inc(x => x.CurrentOccupancy, -1).Set(x => x.UpdatedAt, now),
+            x => x.Id == session.ZoneId && x.CurrentOccupancy > 0,
+            Builders<Zone>.Update
+                .Inc(x => x.CurrentOccupancy, -1)
+                .Set(x => x.UpdatedAt, now),
             cancellationToken: ct);
 
-        // Log.
-        await WriteLogAsync(session.Id,
-            request.IsLostTicket ? ParkingSessionLogAction.LostTicket : ParkingSessionLogAction.CheckOut,
-            session.ParkingSlotId, null,
-            request.IsLostTicket
-                ? $"Check-out plate {session.PlateNumber} with LOST TICKET. Fee {totalFee:0.##}."
-                : $"Check-out plate {session.PlateNumber}. Fee {totalFee:0.##}.",
-            userId, now, ct);
+        await WriteLogAsync(
+            session.Id,
+            session.IsLostTicket ? ParkingSessionLogAction.LostTicket : ParkingSessionLogAction.CheckOut,
+            session.ParkingSlotId,
+            null,
+            session.IsLostTicket
+                ? $"Check-out plate {session.PlateNumber} with LOST TICKET. Fee {session.TotalFee:0.##}."
+                : $"Check-out plate {session.PlateNumber}. Fee {session.TotalFee:0.##}.",
+            userId,
+            now,
+            ct);
 
-        // Notify realtime.
         if (slot is not null)
             await NotifyAsync(slot, SlotStatus.Available, null, ct);
 
-        var updated = await _db.ParkingSessions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
-        return Result<ParkingSessionDto>.Ok(Map(updated!));
+        var updated = await _db.ParkingSessions.Find(x => x.Id == session.Id).FirstOrDefaultAsync(ct);
+        return Result<CheckoutResponse>.Ok(BuildCheckoutResponse(updated!, payment, true));
     }
+
+    private static CheckoutResponse BuildCheckoutResponse(
+        ParkingSession session,
+        ParkingPaymentDto? payment,
+        bool finalized) => new()
+    {
+        Session = Map(session),
+        CheckoutTime = session.CheckOutTime ?? DateTime.UtcNow,
+        Amount = session.TotalFee,
+        PaymentId = session.PaymentId,
+        PaymentStatus = payment?.Status,
+        RequiresPayment = !finalized && session.TotalFee > 0 && payment?.Status != ParkingPaymentStatus.Paid,
+        Finalized = finalized
+    };
 
     public async Task<Result<EstimateFeeResponse>> EstimateFeeAsync(
         string id,
@@ -444,15 +593,15 @@ public class ParkingSessionService : IParkingSessionService
                     ParkingErrorCodes.SessionAccessDenied);
         }
 
-        var now = DateTime.UtcNow;
+        var estimateAt = session.CheckOutTime ?? DateTime.UtcNow;
         var response = new EstimateFeeResponse
         {
             SessionId = session.Id,
             PlateNumber = session.PlateNumber,
             VehicleTypeId = session.VehicleTypeId,
             CheckInTime = session.CheckInTime,
-            EstimatedAt = now,
-            Duration = now - session.CheckInTime,
+            EstimatedAt = estimateAt,
+            Duration = estimateAt - session.CheckInTime,
             IsMonthly = session.IsMonthly
         };
 
@@ -464,7 +613,7 @@ public class ParkingSessionService : IParkingSessionService
             session.BuildingId,
             session.VehicleTypeId,
             session.CheckInTime,
-            now,
+            estimateAt,
             false,
             ct);
         if (!feeResult.Success)
@@ -737,6 +886,7 @@ public class ParkingSessionService : IParkingSessionService
         Status = x.Status,
         IsMonthly = x.IsMonthly,
         SubscriptionId = x.SubscriptionId,
+        IsLostTicket = x.IsLostTicket,
         TotalFee = x.TotalFee,
         CreatedByUserId = x.CreatedByUserId,
         CompletedByUserId = x.CompletedByUserId,

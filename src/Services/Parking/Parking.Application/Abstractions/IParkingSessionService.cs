@@ -37,9 +37,14 @@ public interface IParkingSessionService
         string userId,
         CancellationToken ct = default);
 
-    Task<Result<ParkingSessionDto>> CheckOutAsync(
+    Task<Result<CheckoutResponse>> PrepareCheckOutAsync(
         string id,
         CheckOutRequest request,
+        string userId,
+        CancellationToken ct = default);
+
+    Task<Result<CheckoutResponse>> FinalizeCheckOutAsync(
+        string id,
         string userId,
         CancellationToken ct = default);
 

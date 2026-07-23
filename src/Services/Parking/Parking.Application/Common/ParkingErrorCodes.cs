@@ -32,6 +32,11 @@ public static class ParkingErrorCodes
     public const string SessionAccessDenied = "SESSION_ACCESS_DENIED";
     public const string ZoneFull = "ZONE_FULL";
     public const string InvalidSubscription = "INVALID_SUBSCRIPTION";
+    public const string PaymentNotFound = "PAYMENT_NOT_FOUND";
+    public const string PaymentNotPaid = "PAYMENT_NOT_PAID";
+    public const string PaymentMismatch = "PAYMENT_MISMATCH";
+    public const string PaymentRequired = "PAYMENT_REQUIRED";
+    public const string PaymentServiceUnavailable = "PAYMENT_SERVICE_UNAVAILABLE";
 
     // Incident
     public const string IncidentNotFound = "INCIDENT_NOT_FOUND";

@@ -42,6 +42,8 @@ public class ParkingSessionDto
 
     public string? SubscriptionId { get; set; }
 
+    public bool IsLostTicket { get; set; }
+
     public decimal TotalFee { get; set; }
 
     public string CreatedByUserId { get; set; } = string.Empty;
@@ -82,14 +84,29 @@ public class CheckOutRequest
 {
     public string? ExitGate { get; set; }
 
-    [Obsolete("TotalFee is calculated by backend during checkout.")]
-    public decimal TotalFee { get; set; }
-
     public bool IsLostTicket { get; set; }
 
+    /// <summary>PaymentMethod numeric value: Cash=1, Card=2, EWallet=3, Mock=4.</summary>
+    public int PaymentMethod { get; set; } = 1;
+
     public string? CheckOutNote { get; set; }
+}
+
+public class CheckoutResponse
+{
+    public ParkingSessionDto Session { get; set; } = new();
+
+    public DateTime CheckoutTime { get; set; }
+
+    public decimal Amount { get; set; }
 
     public string? PaymentId { get; set; }
+
+    public int? PaymentStatus { get; set; }
+
+    public bool RequiresPayment { get; set; }
+
+    public bool Finalized { get; set; }
 }
 
 public class ChangeSlotRequest
