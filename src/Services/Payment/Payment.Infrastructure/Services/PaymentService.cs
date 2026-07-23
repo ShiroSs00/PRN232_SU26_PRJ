@@ -86,6 +86,9 @@ public class PaymentService : IPaymentService
         var subscriptionId = string.IsNullOrWhiteSpace(request.SubscriptionId)
             ? null
             : request.SubscriptionId.Trim();
+        var ownerUserId = string.IsNullOrWhiteSpace(request.OwnerUserId)
+            ? null
+            : request.OwnerUserId.Trim();
 
         if ((sessionId is null) == (subscriptionId is null))
             return Result<PaymentDto>.Fail(
@@ -117,7 +120,9 @@ public class PaymentService : IPaymentService
 
         if (existing is not null)
         {
-            if (existing.Amount != request.Amount || existing.PlateNumber != plate)
+            if (existing.Amount != request.Amount ||
+                existing.PlateNumber != plate ||
+                !string.Equals(existing.OwnerUserId, ownerUserId, StringComparison.Ordinal))
                 return Result<PaymentDto>.Fail(
                     "An existing payment for this source has different immutable details.",
                     PaymentErrorCodes.DuplicatePaymentForSession);
@@ -134,6 +139,7 @@ public class PaymentService : IPaymentService
             VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId.Trim(),
             ShiftId = string.IsNullOrWhiteSpace(request.ShiftId) ? null : request.ShiftId.Trim(),
             CreatedByUserId = createdByUserId,
+            OwnerUserId = ownerUserId,
             Amount = request.Amount,
             Method = request.Method,
             Status = PaymentStatus.Pending,
@@ -193,6 +199,7 @@ public class PaymentService : IPaymentService
         VehicleId = x.VehicleId,
         ShiftId = x.ShiftId,
         CreatedByUserId = x.CreatedByUserId,
+        OwnerUserId = x.OwnerUserId,
         ConfirmedByUserId = x.ConfirmedByUserId,
         TransactionCode = x.TransactionCode,
         Amount = x.Amount,

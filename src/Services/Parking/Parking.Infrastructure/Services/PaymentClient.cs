@@ -44,6 +44,7 @@ public sealed class PaymentClient : IPaymentClient
             SubscriptionId = (string?)null,
             command.PlateNumber,
             command.VehicleId,
+            command.OwnerUserId,
             command.ShiftId,
             command.Amount,
             command.Method,

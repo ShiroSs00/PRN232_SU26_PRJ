@@ -17,6 +17,8 @@ public class Payment : BaseEntity
     public string? ShiftId { get; set; }
 
     public string CreatedByUserId { get; set; } = string.Empty;
+    public string? OwnerUserId { get; set; }
+
 
     public string? ConfirmedByUserId { get; set; }
 
