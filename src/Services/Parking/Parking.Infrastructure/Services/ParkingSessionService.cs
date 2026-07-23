@@ -399,12 +399,25 @@ public class ParkingSessionService : IParkingSessionService
         ParkingPaymentDto? payment = null;
         if (totalFee > 0)
         {
+            Vehicle? vehicle = null;
+            if (!string.IsNullOrWhiteSpace(session.VehicleId))
+                vehicle = await _db.Vehicles
+                    .Find(v => v.Id == session.VehicleId)
+                    .FirstOrDefaultAsync(ct);
+            if (vehicle is null)
+            {
+                var normalizedPlate = session.PlateNumber.Trim().ToUpperInvariant();
+                vehicle = await _db.Vehicles
+                    .Find(v => v.PlateNumber == normalizedPlate && v.IsActive)
+                    .FirstOrDefaultAsync(ct);
+            }
             var paymentResult = await _paymentClient.CreateForParkingSessionAsync(
                 new CreateParkingPaymentCommand
                 {
                     ParkingSessionId = session.Id,
                     PlateNumber = session.PlateNumber,
                     VehicleId = session.VehicleId,
+                    OwnerUserId = vehicle?.OwnerUserId,
                     Amount = totalFee,
                     Method = request.PaymentMethod,
                     ShiftId = null

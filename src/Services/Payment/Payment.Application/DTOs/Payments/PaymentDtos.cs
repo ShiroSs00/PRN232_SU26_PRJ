@@ -17,6 +17,8 @@ public class PaymentDto
     public string? ShiftId { get; set; }
 
     public string CreatedByUserId { get; set; } = string.Empty;
+    public string? OwnerUserId { get; set; }
+
 
     public string? ConfirmedByUserId { get; set; }
 
@@ -54,6 +56,8 @@ public class CreatePaymentRequest
     public string? VehicleId { get; set; }
 
     public string? ShiftId { get; set; }
+    public string? OwnerUserId { get; set; }
+
 
     public decimal Amount { get; set; }
 
