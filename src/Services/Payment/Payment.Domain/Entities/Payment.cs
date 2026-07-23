@@ -40,6 +40,10 @@ public class Payment : BaseEntity
     /// <summary>PayOS hosted checkout URL.</summary>
     public string? CheckoutUrl { get; set; }
 
+    /// <summary>PayOS QR code image URL returned from /v2/payment-requests.</summary>
+    [BsonIgnoreIfNull]
+    public string? QrCode { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? PaidAt { get; set; }

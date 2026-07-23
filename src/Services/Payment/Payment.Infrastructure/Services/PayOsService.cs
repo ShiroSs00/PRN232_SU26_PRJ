@@ -73,7 +73,38 @@ public class PayOsService : IPayOsService
                 $"Only Pending payments can be sent to PayOS (current: {payment.Status}).",
                 PaymentErrorCodes.InvalidStatusTransition);
 
-        var orderCode = payment.OrderCode ?? GenerateOrderCode();
+        // If a PayOS link was already created AND qrCode is stored, return it.
+        if (!string.IsNullOrWhiteSpace(payment.PaymentLinkId) &&
+            !string.IsNullOrWhiteSpace(payment.QrCode) &&
+            payment.OrderCode.HasValue)
+        {
+            return Result<PayOsLinkResponse>.Ok(new PayOsLinkResponse
+            {
+                PaymentId = paymentId,
+                OrderCode = payment.OrderCode.Value,
+                CheckoutUrl = payment.CheckoutUrl,
+                QrCode = payment.QrCode,
+                PaymentLinkId = payment.PaymentLinkId,
+                Amount = payment.Amount,
+                Description = BuildDescription(payment)
+            });
+        }
+
+        // If a link exists but no QrCode (old record), cancel it so we can create a fresh one.
+        if (!string.IsNullOrWhiteSpace(payment.PaymentLinkId) && payment.OrderCode.HasValue)
+        {
+            try
+            {
+                await _client.PaymentRequests.CancelAsync(payment.PaymentLinkId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "PayOS CancelAsync failed for payment {PaymentId}", paymentId);
+            }
+        }
+
+        // Generate a new orderCode (old one was used by the canceled link).
+        var orderCode = GenerateOrderCode();
         // PayOS requires a description ≤ 25 chars; we use a deterministic short tag.
         var description = BuildDescription(payment);
         var amountInt = (long)Math.Round(payment.Amount, MidpointRounding.AwayFromZero);
@@ -101,6 +132,7 @@ public class PayOsService : IPayOsService
                 .Set(x => x.OrderCode, orderCode)
                 .Set(x => x.PaymentLinkId, response.PaymentLinkId)
                 .Set(x => x.CheckoutUrl, response.CheckoutUrl)
+                .Set(x => x.QrCode, response.QrCode)
                 .Set(x => x.Method, PaymentMethod.EWallet);
             await _db.Payments.UpdateOneAsync(x => x.Id == paymentId, update, cancellationToken: ct);
 

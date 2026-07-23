@@ -246,16 +246,16 @@ public class ParkingSlotService : IParkingSlotService
         var existingCodes = existing.Select(e => e.Code).ToHashSet();
         var existingPositions = existing.Select(e => (e.Row, e.Column)).ToHashSet();
 
-        var dupCode = codes.FirstOrDefault(existingCodes.Contains);
-        if (dupCode is not null)
-            return Result<List<SlotDto>>.Fail($"Slot code '{dupCode}' already exists on this floor.", ParkingErrorCodes.DuplicateSlotCode);
+        // Skip slots that already exist (same code or same position) — only insert new ones.
+        var slotsToInsert = newSlots
+            .Where(s => !existingCodes.Contains(s.Code) && !existingPositions.Contains((s.Row, s.Column)))
+            .ToList();
 
-        var dupPos = positions.FirstOrDefault(existingPositions.Contains);
-        if (dupPos != default)
-            return Result<List<SlotDto>>.Fail($"Position ({dupPos.Row},{dupPos.Col}) is already taken on this floor.", ParkingErrorCodes.SlotPositionTaken);
+        if (slotsToInsert.Count == 0)
+            return Result<List<SlotDto>>.Ok(new List<SlotDto>());
 
-        await _db.ParkingSlots.InsertManyAsync(newSlots, cancellationToken: ct);
-        return Result<List<SlotDto>>.Ok(newSlots.Select(Map).ToList());
+        await _db.ParkingSlots.InsertManyAsync(slotsToInsert, cancellationToken: ct);
+        return Result<List<SlotDto>>.Ok(slotsToInsert.Select(Map).ToList());
     }
 
     public async Task<Result<SlotDto>> UpdateStatusAsync(string id, UpdateSlotStatusRequest request, CancellationToken ct = default)

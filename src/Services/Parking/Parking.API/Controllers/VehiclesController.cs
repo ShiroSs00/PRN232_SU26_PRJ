@@ -82,9 +82,17 @@ public class VehiclesController : ControllerBase
         [FromBody] CreateVehicleRequest request,
         CancellationToken ct)
     {
-        // Driver tự đăng ký xe: gắn chủ sở hữu là chính họ.
+        // Driver tự đăng ký xe: gắn chủ sở hữu là chính họ + tự điền thông tin từ JWT.
         if (IsDriverOnly())
+        {
             request.OwnerUserId = GetUserId();
+            if (string.IsNullOrWhiteSpace(request.OwnerName))
+                request.OwnerName = User.FindFirstValue("full_name");
+            if (string.IsNullOrWhiteSpace(request.OwnerPhone))
+                request.OwnerPhone = User.FindFirstValue("phone_number");
+            if (string.IsNullOrWhiteSpace(request.OwnerEmail))
+                request.OwnerEmail = User.FindFirstValue(ClaimTypes.Email);
+        }
         var result = await _service.CreateAsync(request, ct);
         if (!result.Success)
             return BadRequest(ApiResponse.Fail(result.Error!));
