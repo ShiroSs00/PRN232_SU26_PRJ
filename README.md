@@ -77,7 +77,9 @@ Each service follows the same Clean Architecture layering:
 
 ## Configuration
 
-Each service reads its MongoDB connection and JWT settings from `appsettings.json` under the `MongoDbSettings` and `JwtSettings` sections. `appsettings.json` is ignored by Git because it holds the real Atlas connection string with a password, so it is never pushed to GitHub.
+Each service reads its MongoDB connection and JWT settings from the standard ASP.NET Core configuration pipeline. Real credentials belong in ignored `appsettings.json` / `appsettings.Local.json` files or environment variables; they must never be committed.
+
+Copy the matching `appsettings.example.json` file to `appsettings.Local.json` for local development, then replace the placeholders. Environment variables use ASP.NET Core's double-underscore convention, for example `MongoDbSettings__ConnectionString` and `JwtSettings__Secret`.
 
 Expected `appsettings.json` shape per service (Auth shown as example):
 
@@ -98,7 +100,7 @@ Expected `appsettings.json` shape per service (Auth shown as example):
 
 Set `DatabaseName` per service: `parking_auth_db`, `parking_main_db`, `parking_payment_db`, `parking_report_db`.
 
-Because `appsettings.json` is not committed, request the file from the project owner when setting up a new machine. No Docker is required to run the services; only MongoDB Atlas access via the connection string.
+If a credential has ever been committed or shared, remove it from the repository and rotate it at the provider; deleting it in a later commit does not invalidate the exposed value. No Docker is required to run the services; only MongoDB Atlas access via the connection string.
 
 ## How to Run
 
