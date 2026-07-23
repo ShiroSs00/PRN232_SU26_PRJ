@@ -47,4 +47,5 @@ public static class PaymentErrorCodes
     public const string PayOsRequestFailed = "PAYOS_REQUEST_FAILED";
     public const string PayOsSettingsMissing = "PAYOS_SETTINGS_MISSING";
     public const string InvalidPaymentMethod = "INVALID_PAYMENT_METHOD";
+    public const string InvalidShift = "INVALID_SHIFT";
 }

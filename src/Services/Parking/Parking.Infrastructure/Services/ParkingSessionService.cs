@@ -467,6 +467,20 @@ public class ParkingSessionService : IParkingSessionService
         ParkingPaymentDto? payment = null;
         if (totalFee > 0)
         {
+            var currentShift = await _db.Shifts
+                .Find(x => x.StaffUserId == userId &&
+                           x.Status == ShiftStatus.Open &&
+                           !x.IsClosing)
+                .FirstOrDefaultAsync(ct);
+            if (request.PaymentMethod == ParkingPaymentMethod.Cash && currentShift is null)
+                return Result<CheckoutResponse>.Fail(
+                    "Open a work shift before collecting a cash payment.",
+                    ParkingErrorCodes.ShiftRequired);
+            if (currentShift is not null && currentShift.BuildingId != session.BuildingId)
+                return Result<CheckoutResponse>.Fail(
+                    "The open shift belongs to a different building.",
+                    ParkingErrorCodes.ShiftBuildingMismatch);
+
             Vehicle? vehicle = null;
             if (!string.IsNullOrWhiteSpace(session.VehicleId))
                 vehicle = await _db.Vehicles
@@ -488,7 +502,7 @@ public class ParkingSessionService : IParkingSessionService
                     OwnerUserId = vehicle?.OwnerUserId,
                     Amount = totalFee,
                     Method = request.PaymentMethod,
-                    ShiftId = null
+                    ShiftId = currentShift?.Id
                 },
                 ct);
             if (!paymentResult.Success)

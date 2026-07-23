@@ -20,6 +20,10 @@ public interface IPaymentService
 
     Task<Result<List<PaymentDto>>> GetBySubscriptionAsync(string subscriptionId, CancellationToken ct = default);
 
+    Task<Result<ShiftPaymentSummaryDto>> GetShiftSummaryAsync(
+        string shiftId,
+        CancellationToken ct = default);
+
     Task<Result<PaymentDto>> CreateAsync(string createdByUserId, CreatePaymentRequest request, CancellationToken ct = default);
 
     Task<Result<PaymentDto>> ConfirmAsync(string id, string confirmedByUserId, CancellationToken ct = default);

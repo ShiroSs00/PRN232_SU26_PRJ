@@ -51,22 +51,35 @@ public sealed class PaymentClient : IPaymentClient
             Note = "Parking checkout"
         };
 
-        return SendAsync(HttpMethod.Post, "/api/v1/payments", payload, ct);
+        return SendAsync<ParkingPaymentDto>(HttpMethod.Post, "/api/v1/payments", payload, ct);
     }
 
     public Task<Result<ParkingPaymentDto>> GetByIdAsync(
         string paymentId,
         CancellationToken ct = default) =>
-        SendAsync(HttpMethod.Get, $"/api/v1/payments/{Uri.EscapeDataString(paymentId)}", null, ct);
+        SendAsync<ParkingPaymentDto>(
+            HttpMethod.Get,
+            $"/api/v1/payments/{Uri.EscapeDataString(paymentId)}",
+            null,
+            ct);
 
-    private async Task<Result<ParkingPaymentDto>> SendAsync(
+    public Task<Result<ShiftPaymentSummaryDto>> GetShiftSummaryAsync(
+        string shiftId,
+        CancellationToken ct = default) =>
+        SendAsync<ShiftPaymentSummaryDto>(
+            HttpMethod.Get,
+            $"/api/v1/payments/by-shift/{Uri.EscapeDataString(shiftId)}/summary",
+            null,
+            ct);
+
+    private async Task<Result<T>> SendAsync<T>(
         HttpMethod method,
         string path,
         object? payload,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_settings.BaseUrl))
-            return Result<ParkingPaymentDto>.Fail(
+            return Result<T>.Fail(
                 "Payment service base URL is not configured.",
                 ParkingErrorCodes.PaymentServiceUnavailable);
 
@@ -92,16 +105,16 @@ public sealed class PaymentClient : IPaymentClient
                 var code = response.StatusCode == HttpStatusCode.NotFound
                     ? ParkingErrorCodes.PaymentNotFound
                     : ParkingErrorCodes.PaymentServiceUnavailable;
-                return Result<ParkingPaymentDto>.Fail("Payment Service rejected the request.", code);
+                return Result<T>.Fail("Payment Service rejected the request.", code);
             }
 
-            var apiResponse = JsonSerializer.Deserialize<ApiResponse<ParkingPaymentDto>>(body, JsonOptions);
+            var apiResponse = JsonSerializer.Deserialize<ApiResponse<T>>(body, JsonOptions);
             if (apiResponse?.Success != true || apiResponse.Data is null)
-                return Result<ParkingPaymentDto>.Fail(
+                return Result<T>.Fail(
                     apiResponse?.Message ?? "Payment Service returned an invalid response.",
                     ParkingErrorCodes.PaymentServiceUnavailable);
 
-            return Result<ParkingPaymentDto>.Ok(apiResponse.Data);
+            return Result<T>.Ok(apiResponse.Data);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -110,7 +123,7 @@ public sealed class PaymentClient : IPaymentClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error calling Payment Service {Method} {Path}", method, path);
-            return Result<ParkingPaymentDto>.Fail(
+            return Result<T>.Fail(
                 "Payment Service is unavailable.",
                 ParkingErrorCodes.PaymentServiceUnavailable);
         }

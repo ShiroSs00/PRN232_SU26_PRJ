@@ -39,6 +39,7 @@ public static class DependencyInjection
 
         // Operations
         services.AddScoped<IParkingSessionService, ParkingSessionService>();
+        services.AddScoped<IShiftService, ShiftService>();
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IFeedbackService, FeedbackService>();
         services.AddScoped<IIncidentService, IncidentService>();

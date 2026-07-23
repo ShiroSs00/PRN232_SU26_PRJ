@@ -25,5 +25,7 @@ public class Shift : BaseEntity
 
     public ShiftStatus Status { get; set; } = ShiftStatus.Open;
 
+    public bool IsClosing { get; set; }
+
     public string? Note { get; set; }
 }
