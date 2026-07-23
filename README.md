@@ -4,7 +4,7 @@ Parking Manager is a parking lot management system for buildings, built as a mic
 
 ## Project Status
 
-This repository contains the backend microservices scaffold using ASP.NET Core and Clean Architecture-style project separation. The current implementation focuses on the service skeleton: each service connects to its own MongoDB Atlas database and exposes health-check endpoints. Business logic (entities, controllers, use cases) is the next step.
+The backend implements the main parking operations: authenticated vehicle check-in/check-out, server-side fee and monthly-subscription decisions, PayOS reconciliation, payment idempotency, atomic slot/capacity updates, and staff shift reconciliation. Each service owns its MongoDB database and exposes health-check endpoints.
 
 ## Tech Stack
 
@@ -78,6 +78,7 @@ Each service follows the same Clean Architecture layering:
 ## Configuration
 
 Each service reads its MongoDB connection and JWT settings from the standard ASP.NET Core configuration pipeline. Real credentials belong in ignored `appsettings.json` / `appsettings.Local.json` files or environment variables; they must never be committed.
+Payment Service also reads `ParkingServiceSettings:BaseUrl` (default `http://localhost:5002`) to validate that a payment's `ShiftId` is the requesting staff member's current open shift.
 
 Copy the matching `appsettings.example.json` file to `appsettings.Local.json` for local development, then replace the placeholders. Environment variables use ASP.NET Core's double-underscore convention, for example `MongoDbSettings__ConnectionString` and `JwtSettings__Secret`.
 
@@ -100,7 +101,18 @@ Expected `appsettings.json` shape per service (Auth shown as example):
 
 Set `DatabaseName` per service: `parking_auth_db`, `parking_main_db`, `parking_payment_db`, `parking_report_db`.
 
+
 If a credential has ever been committed or shared, remove it from the repository and rotate it at the provider; deleting it in a later commit does not invalidate the exposed value. No Docker is required to run the services; only MongoDB Atlas access via the connection string.
+
+## Core Flows
+
+1. Staff opens a shift with `POST /api/v1/shifts/open`.
+2. Check-in resolves a valid monthly subscription on the server, atomically claims zone capacity and a slot, then creates an active session.
+3. Checkout is two-stage: `POST /api/v1/parking-sessions/{id}/check-out` calculates the amount and creates an idempotent payment; `POST /api/v1/parking-sessions/{id}/finalize-check-out` requires a matching `Paid` payment before releasing the slot.
+4. Cash payments must reference the staff member's current open shift. Closing a shift locks it, rejects pending payments, sums paid cash/non-cash payments, and records any cash difference.
+5. PayOS webhook and polling both use the same amount/identity/status reconciliation rules.
+
+Monthly sessions close without a payment when there is no overtime or penalty. A penalty-only monthly fee still requires payment before finalization.
 
 ## How to Run
 
@@ -122,6 +134,14 @@ dotnet run --project src/ApiGateway --urls "http://localhost:5000"
 ```
 
 ## Health Checks
+
+Run the automated tests:
+
+```bash
+dotnet test PRN232_PRJ.sln --no-restore
+```
+
+The suite contains application-level flow integration tests for checkout/payment, monthly eligibility, PayOS reconciliation, and shift reconciliation. Database-backed end-to-end tests require running MongoDB and the services with local configuration.
 
 Each service exposes:
 

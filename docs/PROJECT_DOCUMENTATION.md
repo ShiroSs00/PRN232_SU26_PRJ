@@ -508,11 +508,11 @@ Remaining capacity: 0
 ### Staff Shift Reconciliation
 
 1. Staff logs in and opens a new shift at the start of work.
-2. All payments collected during the shift are linked to the open shift.
+2. Only one open shift is allowed per staff member; cash checkout must use that staff member's current shift in the same building.
 3. At the end of the shift, staff opens the shift close screen.
-4. The system shows the expected cash amount as the sum of cash payments in the shift.
+4. The system locks the shift, rejects close while payments are pending, and calculates expected cash from paid cash payments.
 5. Staff counts the actual cash and enters the counted amount.
-6. The system calculates the difference (over or short) and stores a note if needed.
+6. The system calculates the difference (over or short) and stores a required note when needed.
 7. The shift status becomes `Closed`.
 
 Expected output:
@@ -693,6 +693,7 @@ POST /shifts/open
 POST /shifts/{id}/close
 ```
 
+Payment reconciliation uses `GET /api/v1/payments/by-shift/{shiftId}/summary` to total paid cash/non-cash payments and detect pending payments before a shift can close.
 ### Reports
 
 ```http
@@ -790,7 +791,7 @@ Report models such as `DashboardSummary`, `RevenueReport`, `OccupancyReport`, `V
 - `Gate`: Id, BuildingId, Code, Name, Type, IsActive, CreatedAt, UpdatedAt
 - `ParkingSession`: Id, PlateNumber, VehicleTypeId, VehicleId, BuildingId, ZoneId, ParkingSlotId, ShiftId, PaymentId, ReservationId, CheckInTime, CheckOutTime, EntryGate, ExitGate, CheckInNote, CheckOutNote, Status, IsMonthly, SubscriptionId, TotalFee, CreatedByUserId, CompletedByUserId, CreatedAt, UpdatedAt
 - `ParkingSessionLog`: Id, ParkingSessionId, Action, FromParkingSlotId, ToParkingSlotId, Description, CreatedByUserId, CreatedAt
-- `Shift`: Id, StaffUserId, BuildingId, OpenedAt, ClosedAt, ExpectedCashAmount, TotalPayments, TotalNonCashAmount, CountedCashAmount, DifferenceAmount, Status, Note
+- `Shift`: Id, StaffUserId, BuildingId, OpenedAt, ClosedAt, ExpectedCashAmount, TotalPayments, TotalNonCashAmount, CountedCashAmount, DifferenceAmount, Status, Note, IsClosing (internal close lock)
 - `IncidentReport`: Id, BuildingId, ParkingSessionId, ParkingSlotId, VehicleId, PlateNumber, Title, Description, Status, ReportedByUserId, ResolvedByUserId, ResolvedAt, IsActive, CreatedAt, UpdatedAt
 - `Reservation`: Id, BuildingId, VehicleTypeId, PlateNumber, VehicleId, DriverUserId, ZoneId, ParkingSlotId, ReservedFrom, ReservedTo, Status, ParkingSessionId, CancelledByUserId, CancelledAt, Note, IsActive, CreatedAt, UpdatedAt
 - `Feedback`: Id, UserId, BuildingId, ParkingSessionId, PaymentId, VehicleId, PlateNumber, Rating, Content, Status, Response, RespondedByUserId, RespondedAt, IsActive, CreatedAt, UpdatedAt
@@ -860,6 +861,7 @@ Indexes are created by the startup `MongoDbInitializer` classes.
 - A monthly session is closed on check-out without creating a payment, unless an overtime or penalty fee applies.
 - Check-in must be blocked when there is no available slot or no remaining capacity for the matching vehicle type, and the system shows a "Parking Full" message. Capacity is measured by available slot count, or by remaining capacity for capacity-based zones.
 - All cash payments must be linked to the staff member's currently open shift.
+- Payment creation validates a supplied `ShiftId` against the requesting staff member's current open shift before and after insert; a closing or closed shift is rejected.
 - A staff member can have only one open shift at a time. A new shift cannot be opened until the previous one is closed.
 - On shift close, the system records the difference between expected cash (sum of cash payments in the shift) and the actual counted cash. A note is required when a difference exists.
 
