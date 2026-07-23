@@ -39,6 +39,7 @@ public class FeeCalculationClient : IFeeCalculationClient
         DateTime checkInTime,
         DateTime checkOutTime,
         bool isLostTicket,
+        bool penaltiesOnly,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_settings.BaseUrl))
@@ -51,7 +52,8 @@ public class FeeCalculationClient : IFeeCalculationClient
             VehicleTypeId = vehicleTypeId,
             CheckInTime = checkInTime,
             CheckOutTime = checkOutTime,
-            IsLostTicket = isLostTicket
+            IsLostTicket = isLostTicket,
+            PenaltiesOnly = penaltiesOnly
         };
 
         try

@@ -210,6 +210,7 @@ public class ParkingSessionsController : ControllerBase
                 ParkingErrorCodes.SessionNotFound => StatusCodes.Status404NotFound,
                 ParkingErrorCodes.SessionNotActive => StatusCodes.Status409Conflict,
                 ParkingErrorCodes.SessionAccessDenied => StatusCodes.Status403Forbidden,
+                ParkingErrorCodes.PaymentServiceUnavailable => StatusCodes.Status502BadGateway,
                 _ => StatusCodes.Status400BadRequest
             };
             return StatusCode(status, ApiResponse.Fail(result.Error!));
@@ -245,6 +246,7 @@ public class ParkingSessionsController : ControllerBase
             ParkingErrorCodes.SessionNotActive => StatusCodes.Status409Conflict,
             ParkingErrorCodes.ZoneFull => StatusCodes.Status409Conflict,
             ParkingErrorCodes.InvalidSubscription => StatusCodes.Status400BadRequest,
+            ParkingErrorCodes.PaymentServiceUnavailable => StatusCodes.Status502BadGateway,
             _ => StatusCodes.Status400BadRequest
         };
         return StatusCode(status, ApiResponse.Fail(result.Error!));

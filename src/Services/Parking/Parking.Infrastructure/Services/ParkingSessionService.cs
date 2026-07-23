@@ -178,23 +178,35 @@ public class ParkingSessionService : IParkingSessionService
                 "An active session already exists for this plate number.",
                 ParkingErrorCodes.ActiveSessionExists);
 
-        // 3. Monthly Subscription Check & Auto-Detection
-        var activeSub = await _subCheck.GetActiveByPlateAsync(plate, ct);
-        var isMonthly = request.IsMonthly;
-        string? subscriptionId = request.SubscriptionId?.Trim();
-
-        if (activeSub != null)
-        {
-            isMonthly = true;
-            subscriptionId ??= activeSub.Id;
-        }
-        else if (request.IsMonthly)
-        {
+        // Monthly status is server-controlled. Client IsMonthly/SubscriptionId values are ignored.
+        var subscriptionResult = await _subCheck.GetActiveAsync(
+            plate,
+            request.BuildingId.Trim(),
+            request.VehicleTypeId.Trim(),
+            ct);
+        if (!subscriptionResult.Success)
             return Result<ParkingSessionDto>.Fail(
-                "No active monthly subscription found for this plate number.",
-                ParkingErrorCodes.InvalidSubscription);
-        }
+                subscriptionResult.Error!,
+                subscriptionResult.ErrorCode!);
 
+        var activeSub = subscriptionResult.Value;
+        var isMonthly = false;
+        string? subscriptionId = null;
+        if (activeSub is not null)
+        {
+            if (!MonthlySubscriptionValidator.IsEligible(
+                    activeSub,
+                    plate,
+                    request.BuildingId,
+                    request.VehicleTypeId,
+                    DateTime.UtcNow))
+                return Result<ParkingSessionDto>.Fail(
+                    "Payment service returned a subscription that does not match this check-in.",
+                    ParkingErrorCodes.InvalidSubscription);
+
+            isMonthly = true;
+            subscriptionId = activeSub.Id;
+        }
         // If checking in against a reservation, load it and validate.
         Reservation? reservation = null;
         if (!string.IsNullOrWhiteSpace(request.ReservationId))
@@ -376,26 +388,22 @@ public class ParkingSessionService : IParkingSessionService
         }
 
         var checkoutTime = session.CheckOutTime ?? DateTime.UtcNow;
-        var totalFee = 0m;
-        if (!session.IsMonthly || request.IsLostTicket)
-        {
-            var feeResult = await _feeCalculation.CalculateAsync(
-                session.BuildingId,
-                session.VehicleTypeId,
-                session.CheckInTime,
-                checkoutTime,
-                request.IsLostTicket,
-                ct);
-            if (!feeResult.Success)
-                return Result<CheckoutResponse>.Fail(feeResult.Error!, feeResult.ErrorCode!);
+        var feeResult = await _feeCalculation.CalculateAsync(
+            session.BuildingId,
+            session.VehicleTypeId,
+            session.CheckInTime,
+            checkoutTime,
+            request.IsLostTicket,
+            session.IsMonthly,
+            ct);
+        if (!feeResult.Success)
+            return Result<CheckoutResponse>.Fail(feeResult.Error!, feeResult.ErrorCode!);
 
-            totalFee = feeResult.Value!.Amount;
-            if (totalFee < 0)
-                return Result<CheckoutResponse>.Fail(
-                    "Calculated fee must be non-negative.",
-                    ParkingErrorCodes.ValidationFailed);
-        }
-
+        var totalFee = feeResult.Value!.Amount;
+        if (totalFee < 0)
+            return Result<CheckoutResponse>.Fail(
+                "Calculated fee must be non-negative.",
+                ParkingErrorCodes.ValidationFailed);
         ParkingPaymentDto? payment = null;
         if (totalFee > 0)
         {
@@ -628,6 +636,7 @@ public class ParkingSessionService : IParkingSessionService
             session.CheckInTime,
             estimateAt,
             false,
+            session.IsMonthly,
             ct);
         if (!feeResult.Success)
             return Result<EstimateFeeResponse>.Fail(feeResult.Error!, feeResult.ErrorCode!);

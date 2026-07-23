@@ -61,14 +61,30 @@ public class SubscriptionService : ISubscriptionService
         return Result<SubscriptionDto>.Ok(Map(entity));
     }
 
-    public async Task<Result<SubscriptionDto?>> GetActiveByPlateAsync(string plateNumber, CancellationToken ct = default)
+    public async Task<Result<SubscriptionDto?>> GetActiveAsync(
+        string plateNumber,
+        string buildingId,
+        string vehicleTypeId,
+        CancellationToken ct = default)
     {
-        var plate = plateNumber.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(plateNumber) ||
+            string.IsNullOrWhiteSpace(buildingId) ||
+            string.IsNullOrWhiteSpace(vehicleTypeId))
+            return Result<SubscriptionDto?>.Fail(
+                "PlateNumber, BuildingId and VehicleTypeId are required.",
+                PaymentErrorCodes.ValidationFailed);
+
+        var plate = SubscriptionPlateNormalizer.Normalize(plateNumber);
+        var building = buildingId.Trim();
+        var vehicleType = vehicleTypeId.Trim();
         var now = DateTime.UtcNow;
 
         var entity = await _db.Subscriptions
             .Find(x => x.PlateNumber == plate &&
+                       x.BuildingId == building &&
+                       x.VehicleTypeId == vehicleType &&
                        x.Status == SubscriptionStatus.Active &&
+                       x.IsActive &&
                        x.StartDate <= now &&
                        x.EndDate >= now)
             .SortByDescending(x => x.EndDate)
@@ -87,10 +103,10 @@ public class SubscriptionService : ISubscriptionService
         var entity = new Subscription
         {
             Id = ObjectId.GenerateNewId().ToString(),
-            PlateNumber = request.PlateNumber.Trim().ToUpperInvariant(),
+            PlateNumber = SubscriptionPlateNormalizer.Normalize(request.PlateNumber),
             VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
-            VehicleTypeId = request.VehicleTypeId,
-            BuildingId = request.BuildingId,
+            VehicleTypeId = request.VehicleTypeId.Trim(),
+            BuildingId = request.BuildingId.Trim(),
             OwnerName = request.OwnerName.Trim(),
             OwnerPhone = request.OwnerPhone.Trim(),
             StartDate = request.StartDate,
@@ -119,8 +135,8 @@ public class SubscriptionService : ISubscriptionService
 
         var update = Builders<Subscription>.Update
             .Set(x => x.VehicleId, string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId)
-            .Set(x => x.VehicleTypeId, request.VehicleTypeId)
-            .Set(x => x.BuildingId, request.BuildingId)
+            .Set(x => x.VehicleTypeId, request.VehicleTypeId.Trim())
+            .Set(x => x.BuildingId, request.BuildingId.Trim())
             .Set(x => x.OwnerName, request.OwnerName.Trim())
             .Set(x => x.OwnerPhone, request.OwnerPhone.Trim())
             .Set(x => x.StartDate, request.StartDate)
@@ -252,10 +268,10 @@ public class SubscriptionService : ISubscriptionService
         var entity = new Subscription
         {
             Id = ObjectId.GenerateNewId().ToString(),
-            PlateNumber = request.PlateNumber.Trim().ToUpperInvariant(),
+            PlateNumber = SubscriptionPlateNormalizer.Normalize(request.PlateNumber),
             VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
-            VehicleTypeId = request.VehicleTypeId,
-            BuildingId = request.BuildingId,
+            VehicleTypeId = request.VehicleTypeId.Trim(),
+            BuildingId = request.BuildingId.Trim(),
             OwnerName = request.OwnerName.Trim(),
             OwnerPhone = request.OwnerPhone.Trim(),
             StartDate = request.StartDate,
