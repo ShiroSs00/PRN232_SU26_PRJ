@@ -122,6 +122,10 @@ public class FeePolicyService : IFeePolicyService
         if (entity is null)
             return Result<FeePolicyDto>.Fail("Fee policy not found.", PaymentErrorCodes.FeePolicyNotFound);
 
+        var validation = ValidateUpdate(request);
+        if (validation is not null)
+            return Result<FeePolicyDto>.Fail(validation, PaymentErrorCodes.ValidationFailed);
+
         var update = Builders<FeePolicy>.Update
             .Set(x => x.Name, request.Name.Trim())
             .Set(x => x.PricingType, request.PricingType)
@@ -276,6 +280,21 @@ public class FeePolicyService : IFeePolicyService
         if (string.IsNullOrWhiteSpace(request.VehicleTypeId)) return "VehicleTypeId is required.";
         if (string.IsNullOrWhiteSpace(request.Name)) return "Name is required.";
         if (request.BasePrice < 0) return "BasePrice must be non-negative.";
+        return request.PricingType switch
+        {
+            PricingType.Hourly when (request.HourlyPrice ?? 0) < 0 => "HourlyPrice must be non-negative.",
+            PricingType.Daily when (request.DailyPrice ?? 0) <= 0 => "DailyPrice must be positive for daily pricing.",
+            PricingType.Monthly when (request.MonthlyPrice ?? 0) <= 0 => "MonthlyPrice must be positive for monthly pricing.",
+            _ => null
+        };
+    }
+
+    private static string? ValidateUpdate(UpdateFeePolicyRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) return "Name is required.";
+        if (request.BasePrice < 0) return "BasePrice must be non-negative.";
+        if (request.LostTicketFee < 0) return "LostTicketFee must be non-negative.";
+        if (request.OvertimeFee < 0) return "OvertimeFee must be non-negative.";
         return request.PricingType switch
         {
             PricingType.Hourly when (request.HourlyPrice ?? 0) < 0 => "HourlyPrice must be non-negative.",

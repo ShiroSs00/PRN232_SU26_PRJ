@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Microsoft.Extensions.Logging;
 using Parking.Application.Abstractions;
 using Parking.Application.Common;
 using Parking.Application.DTOs;
@@ -19,6 +20,7 @@ public class ParkingSessionService : IParkingSessionService
     private readonly IFeeCalculationClient _feeCalculation;
     private readonly ISubscriptionCheckClient _subCheck;
     private readonly IPaymentClient _paymentClient;
+    private readonly ILogger<ParkingSessionService> _logger;
 
     public ParkingSessionService(
         MongoDbContext db,
@@ -26,7 +28,8 @@ public class ParkingSessionService : IParkingSessionService
         ISlotAllocationService slotAllocation,
         IFeeCalculationClient feeCalculation,
         ISubscriptionCheckClient subCheck,
-        IPaymentClient paymentClient)
+        IPaymentClient paymentClient,
+        ILogger<ParkingSessionService> logger)
     {
         _db = db;
         _notifier = notifier;
@@ -34,6 +37,7 @@ public class ParkingSessionService : IParkingSessionService
         _feeCalculation = feeCalculation;
         _subCheck = subCheck;
         _paymentClient = paymentClient;
+        _logger = logger;
     }
 
     public async Task<Result<PagedResult<ParkingSessionDto>>> GetListAsync(
@@ -53,7 +57,7 @@ public class ParkingSessionService : IParkingSessionService
             filters.Add(fb.Eq(x => x.Status, (ParkingSessionStatus)query.Status.Value));
         if (!string.IsNullOrWhiteSpace(query.PlateNumber))
         {
-            var plate = query.PlateNumber.Trim();
+            var plate = System.Text.RegularExpressions.Regex.Escape(query.PlateNumber.Trim());
             filters.Add(fb.Regex(x => x.PlateNumber, new BsonRegularExpression(plate, "i")));
         }
         if (query.PlateNumbers is { Count: > 0 })
@@ -401,6 +405,9 @@ public class ParkingSessionService : IParkingSessionService
         string temporarySessionId,
         DateTime now)
     {
+        _logger.LogWarning(
+            "Rolling back check-in claim: zone={ZoneId}, slot={SlotId}, tempSession={TempSessionId}",
+            zoneId, slotId, temporarySessionId);
         if (!string.IsNullOrWhiteSpace(slotId))
         {
             await _db.ParkingSlots.UpdateOneAsync(
@@ -920,6 +927,9 @@ public class ParkingSessionService : IParkingSessionService
         string? claimedZoneId,
         DateTime now)
     {
+        _logger.LogWarning(
+            "Rolling back slot change claim: newSlot={NewSlotId}, session={SessionId}, zone={ZoneId}",
+            newSlotId, sessionId, claimedZoneId);
         if (!string.IsNullOrWhiteSpace(newSlotId))
         {
             await _db.ParkingSlots.UpdateOneAsync(
@@ -955,10 +965,14 @@ public class ParkingSessionService : IParkingSessionService
         var update = Builders<ParkingSession>.Update.Set(x => x.UpdatedAt, now);
         var changes = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(request.PlateNumber) && request.PlateNumber.Trim() != session.PlateNumber)
+        if (!string.IsNullOrWhiteSpace(request.PlateNumber))
         {
-            update = update.Set(x => x.PlateNumber, request.PlateNumber.Trim());
-            changes.Add($"biển số → {request.PlateNumber.Trim()}");
+            var normalizedPlate = PlateNumberNormalizer.Normalize(request.PlateNumber);
+            if (normalizedPlate != session.PlateNumber)
+            {
+                update = update.Set(x => x.PlateNumber, normalizedPlate);
+                changes.Add($"biển số → {normalizedPlate}");
+            }
         }
         if (!string.IsNullOrWhiteSpace(request.VehicleTypeId) && request.VehicleTypeId != session.VehicleTypeId)
         {
@@ -1000,6 +1014,31 @@ public class ParkingSessionService : IParkingSessionService
             .Set(x => x.CheckInNote, note ?? session.CheckInNote)
             .Set(x => x.UpdatedAt, now);
         await _db.ParkingSessions.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
+
+        // Release the slot and decrement zone occupancy so the slot becomes available again.
+        var slot = await _db.ParkingSlots
+            .Find(x => x.Id == session.ParkingSlotId)
+            .FirstOrDefaultAsync(ct);
+        if (slot is not null)
+        {
+            var slotResult = await _db.ParkingSlots.UpdateOneAsync(
+                x => x.Id == slot.Id && x.CurrentSessionId == session.Id,
+                Builders<ParkingSlot>.Update
+                    .Set(x => x.Status, SlotStatus.Available)
+                    .Set(x => x.CurrentSessionId, (string?)null)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: ct);
+            if (slotResult.ModifiedCount > 0)
+            {
+                await _db.Zones.UpdateOneAsync(
+                    x => x.Id == session.ZoneId && x.CurrentOccupancy > 0,
+                    Builders<Zone>.Update
+                        .Inc(x => x.CurrentOccupancy, -1)
+                        .Set(x => x.UpdatedAt, now),
+                    cancellationToken: ct);
+                await NotifyAsync(slot, SlotStatus.Available, null, ct);
+            }
+        }
 
         await WriteLogAsync(session.Id, ParkingSessionLogAction.ManualAdjustment, session.ParkingSlotId, session.ParkingSlotId,
             $"Đánh dấu ngoại lệ cho biển {session.PlateNumber}." + (note != null ? $" Ghi chú: {note}" : ""),

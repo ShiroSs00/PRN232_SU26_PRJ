@@ -28,7 +28,7 @@ public interface ISubscriptionService
         string vehicleTypeId,
         CancellationToken ct = default);
 
-    Task<Result<SubscriptionDto>> CreateAsync(CreateSubscriptionRequest request, CancellationToken ct = default);
+    Task<Result<SubscriptionDto>> CreateAsync(CreateSubscriptionRequest request, string createdByUserId, CancellationToken ct = default);
 
     Task<Result<SubscriptionDto>> RequestAsync(CreateSubscriptionRequest request, string userId, CancellationToken ct = default);
 

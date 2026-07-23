@@ -89,7 +89,7 @@ public class SubscriptionsController : ControllerBase
         [FromBody] CreateSubscriptionRequest request,
         CancellationToken ct)
     {
-        var result = await _service.CreateAsync(request, ct);
+        var result = await _service.CreateAsync(request, GetUserId(), ct);
         if (!result.Success)
             return BadRequest(ApiResponse.Fail(result.Error!));
         return CreatedAtAction(

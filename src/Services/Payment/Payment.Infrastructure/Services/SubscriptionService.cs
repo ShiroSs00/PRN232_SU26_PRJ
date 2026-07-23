@@ -93,7 +93,7 @@ public class SubscriptionService : ISubscriptionService
         return Result<SubscriptionDto?>.Ok(entity is null ? null : Map(entity));
     }
 
-    public async Task<Result<SubscriptionDto>> CreateAsync(CreateSubscriptionRequest request, CancellationToken ct = default)
+    public async Task<Result<SubscriptionDto>> CreateAsync(CreateSubscriptionRequest request, string createdByUserId, CancellationToken ct = default)
     {
         var validation = Validate(request.PlateNumber, request.VehicleTypeId, request.BuildingId, request.OwnerName,
             request.OwnerPhone, request.MonthlyFee, request.StartDate, request.EndDate);
@@ -114,6 +114,7 @@ public class SubscriptionService : ISubscriptionService
             MonthlyFee = request.MonthlyFee,
             Status = SubscriptionStatus.Active,
             Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
+            CreatedByUserId = createdByUserId,
             CreatedAt = DateTime.UtcNow,
             IsActive = true
         };
