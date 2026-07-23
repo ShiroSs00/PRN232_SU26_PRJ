@@ -94,6 +94,16 @@ public class MongoDbInitializer
                 Builders<ParkingSession>.IndexKeys.Ascending(x => x.PlateNumber).Ascending(x => x.Status),
                 new CreateIndexOptions { Name = "ix_parking_sessions_plate_status" }),
             new CreateIndexModel<ParkingSession>(
+                Builders<ParkingSession>.IndexKeys.Ascending(x => x.PlateNumber).Ascending(x => x.Status),
+                new CreateIndexOptions<ParkingSession>
+                {
+                    Name = "ux_parking_sessions_active_plate",
+                    Unique = true,
+                    PartialFilterExpression = Builders<ParkingSession>.Filter.Eq(
+                        x => x.Status,
+                        Parking.Domain.Enums.ParkingSessionStatus.Active)
+                }),
+            new CreateIndexModel<ParkingSession>(
                 Builders<ParkingSession>.IndexKeys.Ascending(x => x.VehicleId).Ascending(x => x.CheckInTime),
                 new CreateIndexOptions { Name = "ix_parking_sessions_vehicle_check_in" }),
             new CreateIndexModel<ParkingSession>(

@@ -273,7 +273,32 @@ public class ParkingSessionService : IParkingSessionService
                 .Set(x => x.CurrentSessionId, tempSessionId)
                 .Set(x => x.UpdatedAt, now);
 
-            var updateResult = await _db.ParkingSlots.UpdateOneAsync(slotFilter, slotUpdate, cancellationToken: ct);
+            var capacityFilter = Builders<Zone>.Filter.And(
+                Builders<Zone>.Filter.Eq(x => x.Id, zone.Id),
+                new BsonDocument("$expr", new BsonDocument(
+                    "$lt",
+                    new BsonArray { "$CurrentOccupancy", "$Capacity" })));
+            var capacityResult = await _db.Zones.UpdateOneAsync(
+                capacityFilter,
+                Builders<Zone>.Update
+                    .Inc(x => x.CurrentOccupancy, 1)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: ct);
+            if (capacityResult.ModifiedCount == 0)
+                return Result<ParkingSessionDto>.Fail(
+                    "Zone is at maximum capacity.",
+                    ParkingErrorCodes.ZoneFull);
+
+            UpdateResult updateResult;
+            try
+            {
+                updateResult = await _db.ParkingSlots.UpdateOneAsync(slotFilter, slotUpdate, cancellationToken: ct);
+            }
+            catch
+            {
+                await RollbackCheckInClaimAsync(zone.Id, slot.Id, tempSessionId, now);
+                throw;
+            }
             if (updateResult.ModifiedCount > 0)
             {
                 // Atomically claimed the slot! Now insert session.
@@ -295,13 +320,22 @@ public class ParkingSessionService : IParkingSessionService
                     CreatedByUserId = userId ?? string.Empty,
                     CreatedAt = now
                 };
-                await _db.ParkingSessions.InsertOneAsync(session, cancellationToken: ct);
-
-                // Increment zone occupancy.
-                await _db.Zones.UpdateOneAsync(
-                    x => x.Id == session.ZoneId,
-                    Builders<Zone>.Update.Inc(x => x.CurrentOccupancy, 1).Set(x => x.UpdatedAt, now),
-                    cancellationToken: ct);
+                try
+                {
+                    await _db.ParkingSessions.InsertOneAsync(session, cancellationToken: ct);
+                }
+                catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+                {
+                    await RollbackCheckInClaimAsync(zone.Id, slot.Id, tempSessionId, now);
+                    return Result<ParkingSessionDto>.Fail(
+                        "An active session already exists for this plate number.",
+                        ParkingErrorCodes.ActiveSessionExists);
+                }
+                catch
+                {
+                    await RollbackCheckInClaimAsync(zone.Id, slot.Id, tempSessionId, now);
+                    throw;
+                }
 
                 // If from a reservation, mark it checked-in and link the session.
                 if (reservation is not null)
@@ -343,6 +377,8 @@ public class ParkingSessionService : IParkingSessionService
                 return Result<ParkingSessionDto>.Ok(Map(session));
             }
 
+            await RollbackCheckInClaimAsync(zone.Id, null, tempSessionId, now);
+
             // If an explicit slot was requested and atomic update failed, reject immediately.
             if (!string.IsNullOrWhiteSpace(request.ParkingSlotId) || reservation != null)
             {
@@ -359,6 +395,30 @@ public class ParkingSessionService : IParkingSessionService
             ParkingErrorCodes.NoAvailableSlot);
     }
 
+    private async Task RollbackCheckInClaimAsync(
+        string zoneId,
+        string? slotId,
+        string temporarySessionId,
+        DateTime now)
+    {
+        if (!string.IsNullOrWhiteSpace(slotId))
+        {
+            await _db.ParkingSlots.UpdateOneAsync(
+                x => x.Id == slotId && x.CurrentSessionId == temporarySessionId,
+                Builders<ParkingSlot>.Update
+                    .Set(x => x.Status, SlotStatus.Available)
+                    .Set(x => x.CurrentSessionId, (string?)null)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: CancellationToken.None);
+        }
+
+        await _db.Zones.UpdateOneAsync(
+            x => x.Id == zoneId && x.CurrentOccupancy > 0,
+            Builders<Zone>.Update
+                .Inc(x => x.CurrentOccupancy, -1)
+                .Set(x => x.UpdatedAt, now),
+            cancellationToken: CancellationToken.None);
+    }
     public async Task<Result<CheckoutResponse>> PrepareCheckOutAsync(
         string id,
         CheckOutRequest request,
@@ -540,25 +600,29 @@ public class ParkingSessionService : IParkingSessionService
         var slot = await _db.ParkingSlots
             .Find(x => x.Id == session.ParkingSlotId)
             .FirstOrDefaultAsync(ct);
+        var slotWasReleased = slot is null;
         if (slot is not null)
         {
             var slotUpdate = Builders<ParkingSlot>.Update
                 .Set(x => x.Status, SlotStatus.Available)
                 .Set(x => x.CurrentSessionId, (string?)null)
                 .Set(x => x.UpdatedAt, now);
-            await _db.ParkingSlots.UpdateOneAsync(
+            var slotResult = await _db.ParkingSlots.UpdateOneAsync(
                 x => x.Id == slot.Id && x.CurrentSessionId == session.Id,
                 slotUpdate,
                 cancellationToken: ct);
+            slotWasReleased = slotResult.ModifiedCount > 0;
         }
 
-        await _db.Zones.UpdateOneAsync(
-            x => x.Id == session.ZoneId && x.CurrentOccupancy > 0,
-            Builders<Zone>.Update
-                .Inc(x => x.CurrentOccupancy, -1)
-                .Set(x => x.UpdatedAt, now),
-            cancellationToken: ct);
-
+        if (slotWasReleased)
+        {
+            await _db.Zones.UpdateOneAsync(
+                x => x.Id == session.ZoneId && x.CurrentOccupancy > 0,
+                Builders<Zone>.Update
+                    .Inc(x => x.CurrentOccupancy, -1)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: ct);
+        }
         await WriteLogAsync(
             session.Id,
             session.IsLostTicket ? ParkingSessionLogAction.LostTicket : ParkingSessionLogAction.CheckOut,
@@ -701,40 +765,64 @@ public class ParkingSessionService : IParkingSessionService
         var now = DateTime.UtcNow;
         var oldSlotId = session.ParkingSlotId;
         var oldSlot = await _db.ParkingSlots.Find(x => x.Id == oldSlotId).FirstOrDefaultAsync(ct);
+        var zoneChanged = !string.IsNullOrWhiteSpace(newSlot.ZoneId) && newSlot.ZoneId != session.ZoneId;
+        var newZoneCapacityClaimed = false;
 
-        // Free old slot.
-        if (oldSlot is not null)
+        if (zoneChanged)
         {
-            var freeUpdate = Builders<ParkingSlot>.Update
-                .Set(x => x.Status, SlotStatus.Available)
-                .Set(x => x.CurrentSessionId, (string?)null)
-                .Set(x => x.UpdatedAt, now);
-            await _db.ParkingSlots.UpdateOneAsync(x => x.Id == oldSlotId, freeUpdate, cancellationToken: ct);
+            var capacityFilter = Builders<Zone>.Filter.And(
+                Builders<Zone>.Filter.Eq(x => x.Id, newSlot.ZoneId),
+                new BsonDocument("$expr", new BsonDocument(
+                    "$lt",
+                    new BsonArray { "$CurrentOccupancy", "$Capacity" })));
+            var capacityResult = await _db.Zones.UpdateOneAsync(
+                capacityFilter,
+                Builders<Zone>.Update
+                    .Inc(x => x.CurrentOccupancy, 1)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: ct);
+            if (capacityResult.ModifiedCount == 0)
+                return Result<ParkingSessionDto>.Fail(
+                    "The target zone is at maximum capacity.",
+                    ParkingErrorCodes.ZoneFull);
+
+            newZoneCapacityClaimed = true;
         }
 
-        // Occupy new slot.
         var occupyUpdate = Builders<ParkingSlot>.Update
             .Set(x => x.Status, SlotStatus.Occupied)
             .Set(x => x.CurrentSessionId, session.Id)
             .Set(x => x.UpdatedAt, now);
-        await _db.ParkingSlots.UpdateOneAsync(x => x.Id == newSlot.Id, occupyUpdate, cancellationToken: ct);
-
-        // If the new slot belongs to a different zone, move occupancy and update the
-        // session's zone/building so check-out later decrements the correct zone.
-        var zoneChanged = !string.IsNullOrWhiteSpace(newSlot.ZoneId) && newSlot.ZoneId != session.ZoneId;
-        if (zoneChanged)
+        UpdateResult occupyResult;
+        try
         {
-            await _db.Zones.UpdateOneAsync(
-                x => x.Id == session.ZoneId,
-                Builders<Zone>.Update.Inc(x => x.CurrentOccupancy, -1).Set(x => x.UpdatedAt, now),
-                cancellationToken: ct);
-            await _db.Zones.UpdateOneAsync(
-                x => x.Id == newSlot.ZoneId,
-                Builders<Zone>.Update.Inc(x => x.CurrentOccupancy, 1).Set(x => x.UpdatedAt, now),
+            occupyResult = await _db.ParkingSlots.UpdateOneAsync(
+                x => x.Id == newSlot.Id && x.Status == SlotStatus.Available,
+                occupyUpdate,
                 cancellationToken: ct);
         }
+        catch
+        {
+            await RollbackSlotChangeClaimAsync(
+                newSlot.Id,
+                session.Id,
+                newZoneCapacityClaimed ? newSlot.ZoneId : null,
+                now);
+            throw;
+        }
 
-        // Update session.
+        if (occupyResult.ModifiedCount == 0)
+        {
+            await RollbackSlotChangeClaimAsync(
+                null,
+                session.Id,
+                newZoneCapacityClaimed ? newSlot.ZoneId : null,
+                now);
+            return Result<ParkingSessionDto>.Fail(
+                "The target slot was taken by another vehicle.",
+                ParkingErrorCodes.SlotNotAvailable);
+        }
+
         var sessionUpdate = Builders<ParkingSession>.Update
             .Set(x => x.ParkingSlotId, newSlot.Id)
             .Set(x => x.UpdatedAt, now);
@@ -744,7 +832,59 @@ public class ParkingSessionService : IParkingSessionService
                 .Set(x => x.ZoneId, newSlot.ZoneId)
                 .Set(x => x.BuildingId, newSlot.BuildingId);
         }
-        await _db.ParkingSessions.UpdateOneAsync(x => x.Id == id, sessionUpdate, cancellationToken: ct);
+
+        UpdateResult sessionResult;
+        try
+        {
+            sessionResult = await _db.ParkingSessions.UpdateOneAsync(
+                x => x.Id == id &&
+                     x.Status == ParkingSessionStatus.Active &&
+                     x.ParkingSlotId == oldSlotId,
+                sessionUpdate,
+                cancellationToken: ct);
+        }
+        catch
+        {
+            await RollbackSlotChangeClaimAsync(
+                newSlot.Id,
+                session.Id,
+                newZoneCapacityClaimed ? newSlot.ZoneId : null,
+                now);
+            throw;
+        }
+
+        if (sessionResult.ModifiedCount == 0)
+        {
+            await RollbackSlotChangeClaimAsync(
+                newSlot.Id,
+                session.Id,
+                newZoneCapacityClaimed ? newSlot.ZoneId : null,
+                now);
+            return Result<ParkingSessionDto>.Fail(
+                "The parking session changed concurrently. Please try again.",
+                ParkingErrorCodes.SessionNotActive);
+        }
+
+        if (oldSlot is not null)
+        {
+            await _db.ParkingSlots.UpdateOneAsync(
+                x => x.Id == oldSlotId && x.CurrentSessionId == session.Id,
+                Builders<ParkingSlot>.Update
+                    .Set(x => x.Status, SlotStatus.Available)
+                    .Set(x => x.CurrentSessionId, (string?)null)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: ct);
+        }
+
+        if (zoneChanged)
+        {
+            await _db.Zones.UpdateOneAsync(
+                x => x.Id == session.ZoneId && x.CurrentOccupancy > 0,
+                Builders<Zone>.Update
+                    .Inc(x => x.CurrentOccupancy, -1)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: ct);
+        }
 
         // Log.
         await WriteLogAsync(session.Id, ParkingSessionLogAction.ChangeSlot, oldSlotId, newSlot.Id,
@@ -758,6 +898,34 @@ public class ParkingSessionService : IParkingSessionService
         await NotifyAsync(newSlot, SlotStatus.Occupied, BuildOccupyingVehicle(updated!), ct);
 
         return Result<ParkingSessionDto>.Ok(Map(updated!));
+    }
+
+    private async Task RollbackSlotChangeClaimAsync(
+        string? newSlotId,
+        string sessionId,
+        string? claimedZoneId,
+        DateTime now)
+    {
+        if (!string.IsNullOrWhiteSpace(newSlotId))
+        {
+            await _db.ParkingSlots.UpdateOneAsync(
+                x => x.Id == newSlotId && x.CurrentSessionId == sessionId,
+                Builders<ParkingSlot>.Update
+                    .Set(x => x.Status, SlotStatus.Available)
+                    .Set(x => x.CurrentSessionId, (string?)null)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: CancellationToken.None);
+        }
+
+        if (!string.IsNullOrWhiteSpace(claimedZoneId))
+        {
+            await _db.Zones.UpdateOneAsync(
+                x => x.Id == claimedZoneId && x.CurrentOccupancy > 0,
+                Builders<Zone>.Update
+                    .Inc(x => x.CurrentOccupancy, -1)
+                    .Set(x => x.UpdatedAt, now),
+                cancellationToken: CancellationToken.None);
+        }
     }
 
     public async Task<Result<ParkingSessionDto>> UpdateInfoAsync(
