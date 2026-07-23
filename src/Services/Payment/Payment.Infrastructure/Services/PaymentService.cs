@@ -4,6 +4,7 @@ using Payment.Application.Abstractions;
 using Payment.Application.Common;
 using Payment.Application.DTOs;
 using Payment.Application.DTOs.Payments;
+using Payment.Domain.Entities;
 using Payment.Domain.Enums;
 using Payment.Infrastructure.Persistence;
 
@@ -128,6 +129,19 @@ public class PaymentService : IPaymentService
             return Result<PaymentDto>.Fail("Amount must be positive.", PaymentErrorCodes.ValidationFailed);
         if (!Enum.IsDefined(request.Method))
             return Result<PaymentDto>.Fail("Payment method is invalid.", PaymentErrorCodes.InvalidPaymentMethod);
+
+        // Validate subscription status when paying for a subscription.
+        if (subscriptionId is not null)
+        {
+            var sub = await _db.Subscriptions.Find(x => x.Id == subscriptionId).FirstOrDefaultAsync(ct);
+            if (sub is null)
+                return Result<PaymentDto>.Fail("Subscription not found.", PaymentErrorCodes.ValidationFailed);
+            if (sub.Status != SubscriptionStatus.PendingPayment)
+                return Result<PaymentDto>.Fail(
+                    "Subscription is not awaiting payment.",
+                    PaymentErrorCodes.ValidationFailed);
+        }
+
         if (request.Method == PaymentMethod.Cash && shiftId is null)
             return Result<PaymentDto>.Fail(
                 "Cash payments require an open shift.",
@@ -252,6 +266,17 @@ public class PaymentService : IPaymentService
             .Set(x => x.PaidAt, now)
             .Set(x => x.ConfirmedByUserId, confirmedByUserId);
         await _db.Payments.UpdateOneAsync(x => x.Id == id, update, cancellationToken: ct);
+
+        // Activate subscription if this payment is linked to one.
+        if (!string.IsNullOrWhiteSpace(entity.SubscriptionId))
+        {
+            var subUpdate = Builders<Subscription>.Update
+                .Set(x => x.Status, SubscriptionStatus.Active)
+                .Set(x => x.UpdatedAt, now);
+            await _db.Subscriptions.UpdateOneAsync(
+                x => x.Id == entity.SubscriptionId && x.Status == SubscriptionStatus.PendingPayment,
+                subUpdate, cancellationToken: ct);
+        }
 
         var updated = await _db.Payments.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         return Result<PaymentDto>.Ok(Map(updated!));

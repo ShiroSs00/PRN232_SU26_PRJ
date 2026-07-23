@@ -6,5 +6,6 @@ public enum SubscriptionStatus
     Expired = 2,
     Suspended = 3,
     Cancelled = 4,
-    PendingApproval = 5
+    PendingApproval = 5,
+    PendingPayment = 6
 }

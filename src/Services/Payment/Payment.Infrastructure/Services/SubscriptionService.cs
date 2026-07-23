@@ -112,7 +112,7 @@ public class SubscriptionService : ISubscriptionService
             StartDate = request.StartDate,
             EndDate = request.EndDate,
             MonthlyFee = request.MonthlyFee,
-            Status = SubscriptionStatus.Active,
+            Status = SubscriptionStatus.PendingPayment,
             Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
             CreatedByUserId = createdByUserId,
             CreatedAt = DateTime.UtcNow,
@@ -128,6 +128,8 @@ public class SubscriptionService : ISubscriptionService
         var entity = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (entity is null)
             return Result<SubscriptionDto>.Fail("Subscription not found.", PaymentErrorCodes.SubscriptionNotFound);
+        if (entity.Status is SubscriptionStatus.Cancelled or SubscriptionStatus.Expired)
+            return Result<SubscriptionDto>.Fail("Cannot update a cancelled or expired subscription.", PaymentErrorCodes.ValidationFailed);
 
         var validation = Validate(entity.PlateNumber, request.VehicleTypeId, request.BuildingId, request.OwnerName,
             request.OwnerPhone, request.MonthlyFee, request.StartDate, request.EndDate);
@@ -156,13 +158,15 @@ public class SubscriptionService : ISubscriptionService
         var entity = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (entity is null)
             return Result<SubscriptionDto>.Fail("Subscription not found.", PaymentErrorCodes.SubscriptionNotFound);
+        if (entity.Status is SubscriptionStatus.Cancelled or SubscriptionStatus.PendingApproval)
+            return Result<SubscriptionDto>.Fail("Cannot renew a cancelled or pending approval subscription.", PaymentErrorCodes.ValidationFailed);
         if (request.Months <= 0)
             return Result<SubscriptionDto>.Fail("Months must be a positive number.", PaymentErrorCodes.ValidationFailed);
 
         var newEnd = (entity.EndDate >= DateTime.UtcNow ? entity.EndDate : DateTime.UtcNow).AddMonths(request.Months);
         var update = Builders<Subscription>.Update
             .Set(x => x.EndDate, newEnd)
-            .Set(x => x.Status, SubscriptionStatus.Active)
+            .Set(x => x.Status, SubscriptionStatus.PendingPayment)
             .Set(x => x.SuspendedAt, (DateTime?)null)
             .Set(x => x.CancelledAt, (DateTime?)null)
             .Set(x => x.UpdatedAt, DateTime.UtcNow);
@@ -177,6 +181,8 @@ public class SubscriptionService : ISubscriptionService
         var entity = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (entity is null)
             return Result<SubscriptionDto>.Fail("Subscription not found.", PaymentErrorCodes.SubscriptionNotFound);
+        if (entity.Status != SubscriptionStatus.Active)
+            return Result<SubscriptionDto>.Fail("Only active subscriptions can be suspended.", PaymentErrorCodes.ValidationFailed);
 
         var now = DateTime.UtcNow;
         var update = Builders<Subscription>.Update
@@ -194,6 +200,8 @@ public class SubscriptionService : ISubscriptionService
         var entity = await _db.Subscriptions.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (entity is null)
             return Result<SubscriptionDto>.Fail("Subscription not found.", PaymentErrorCodes.SubscriptionNotFound);
+        if (entity.Status is not (SubscriptionStatus.Active or SubscriptionStatus.Suspended or SubscriptionStatus.PendingPayment))
+            return Result<SubscriptionDto>.Fail("Only active, suspended, or pending payment subscriptions can be cancelled.", PaymentErrorCodes.ValidationFailed);
 
         var now = DateTime.UtcNow;
         var update = Builders<Subscription>.Update
@@ -302,7 +310,7 @@ public class SubscriptionService : ISubscriptionService
 
         var now = DateTime.UtcNow;
         var update = Builders<Subscription>.Update
-            .Set(x => x.Status, SubscriptionStatus.Active)
+            .Set(x => x.Status, SubscriptionStatus.PendingPayment)
             .Set(x => x.ApprovedByUserId, userId)
             .Set(x => x.ApprovedAt, now)
             .Set(x => x.RejectionReason, (string?)null)
