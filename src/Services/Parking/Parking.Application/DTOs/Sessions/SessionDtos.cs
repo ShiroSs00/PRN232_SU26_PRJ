@@ -73,8 +73,10 @@ public class CheckInRequest
 
     public string? EntryGate { get; set; }
 
+    /// <summary>Legacy input retained for compatibility; ignored because monthly status is resolved server-side.</summary>
     public bool IsMonthly { get; set; }
 
+    /// <summary>Legacy input retained for compatibility; ignored because subscription identity is resolved server-side.</summary>
     public string? SubscriptionId { get; set; }
 
     public string? CheckInNote { get; set; }
