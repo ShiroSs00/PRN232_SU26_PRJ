@@ -25,6 +25,14 @@ public sealed class ParkingPaymentDto
     public string? ShiftId { get; set; }
 }
 
+public sealed class ShiftPaymentSummaryDto
+{
+    public string ShiftId { get; set; } = string.Empty;
+    public decimal CashAmount { get; set; }
+    public decimal NonCashAmount { get; set; }
+    public long PendingPaymentCount { get; set; }
+}
+
 public static class ParkingPaymentStatus
 {
     public const int Pending = 1;
@@ -32,6 +40,11 @@ public static class ParkingPaymentStatus
     public const int Failed = 3;
     public const int Refunded = 4;
     public const int Cancelled = 5;
+}
+
+public static class ParkingPaymentMethod
+{
+    public const int Cash = 1;
 }
 
 public interface IPaymentClient
@@ -42,5 +55,9 @@ public interface IPaymentClient
 
     Task<Result<ParkingPaymentDto>> GetByIdAsync(
         string paymentId,
+        CancellationToken ct = default);
+
+    Task<Result<ShiftPaymentSummaryDto>> GetShiftSummaryAsync(
+        string shiftId,
         CancellationToken ct = default);
 }

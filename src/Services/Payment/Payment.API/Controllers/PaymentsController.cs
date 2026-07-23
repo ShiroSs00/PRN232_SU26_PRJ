@@ -73,6 +73,15 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<List<PaymentDto>>.Ok(items));
     }
 
+    [HttpGet("by-shift/{shiftId}/summary")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+    [ProducesResponseType(typeof(ApiResponse<ShiftPaymentSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetShiftSummary(string shiftId, CancellationToken ct)
+    {
+        var result = await _payments.GetShiftSummaryAsync(shiftId, ct);
+        return Ok(ApiResponse<ShiftPaymentSummaryDto>.Ok(result.Value!));
+    }
+
     [HttpPost]
     // Driver creation is intentionally disabled: checkout payments are created by
     // trusted staff orchestration after the backend calculates the amount.
@@ -93,6 +102,7 @@ public class PaymentsController : ControllerBase
             var status = result.ErrorCode switch
             {
                 PaymentErrorCodes.DuplicatePaymentForSession => StatusCodes.Status409Conflict,
+                PaymentErrorCodes.InvalidShift => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status400BadRequest
             };
             return StatusCode(status, ApiResponse.Fail(result.Error!));

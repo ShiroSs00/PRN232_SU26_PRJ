@@ -130,6 +130,16 @@ public class MongoDbInitializer
                 Builders<Shift>.IndexKeys.Ascending(x => x.StaffUserId).Ascending(x => x.Status),
                 new CreateIndexOptions { Name = "ix_shifts_staff_status" }),
             new CreateIndexModel<Shift>(
+                Builders<Shift>.IndexKeys.Ascending(x => x.StaffUserId).Ascending(x => x.Status),
+                new CreateIndexOptions<Shift>
+                {
+                    Name = "ux_shifts_open_staff",
+                    Unique = true,
+                    PartialFilterExpression = Builders<Shift>.Filter.Eq(
+                        x => x.Status,
+                        Parking.Domain.Enums.ShiftStatus.Open)
+                }),
+            new CreateIndexModel<Shift>(
                 Builders<Shift>.IndexKeys.Ascending(x => x.BuildingId).Descending(x => x.OpenedAt),
                 new CreateIndexOptions { Name = "ix_shifts_building_opened_at" })
         });

@@ -228,6 +228,8 @@ public class ParkingSessionsController : ControllerBase
             ParkingErrorCodes.PaymentNotPaid => StatusCodes.Status409Conflict,
             ParkingErrorCodes.PaymentMismatch => StatusCodes.Status409Conflict,
             ParkingErrorCodes.PaymentRequired => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.ShiftRequired => StatusCodes.Status409Conflict,
+            ParkingErrorCodes.ShiftBuildingMismatch => StatusCodes.Status409Conflict,
             ParkingErrorCodes.PaymentServiceUnavailable => StatusCodes.Status502BadGateway,
             _ => StatusCodes.Status400BadRequest
         };

@@ -22,6 +22,9 @@ public static class DependencyInjection
         services.Configure<PayOsSettings>(
             configuration.GetSection(nameof(PayOsSettings)));
 
+        services.Configure<ParkingServiceSettings>(
+            configuration.GetSection(nameof(ParkingServiceSettings)));
+
         services.AddSingleton<Persistence.MongoDbContext>();
         services.AddSingleton<Persistence.MongoDbInitializer>();
 
@@ -29,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddScoped<IPayOsService, PayOsService>();
+        services.AddHttpClient<IShiftValidationClient, ShiftValidationClient>();
 
         return services;
     }

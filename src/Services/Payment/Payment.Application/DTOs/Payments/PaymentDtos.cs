@@ -66,6 +66,14 @@ public class CreatePaymentRequest
     public string? Note { get; set; }
 }
 
+public sealed class ShiftPaymentSummaryDto
+{
+    public string ShiftId { get; set; } = string.Empty;
+    public decimal CashAmount { get; set; }
+    public decimal NonCashAmount { get; set; }
+    public long PendingPaymentCount { get; set; }
+}
+
 public class PayOsLinkResponse
 {
     public string PaymentId { get; set; } = string.Empty;
