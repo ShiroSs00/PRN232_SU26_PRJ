@@ -147,8 +147,29 @@ public class PaymentService : IPaymentService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _db.Payments.InsertOneAsync(entity, cancellationToken: ct);
-        return Result<PaymentDto>.Ok(Map(entity));
+        try
+        {
+            await _db.Payments.InsertOneAsync(entity, cancellationToken: ct);
+            return Result<PaymentDto>.Ok(Map(entity));
+        }
+        catch (MongoWriteException ex) when (
+            sessionId is not null &&
+            ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            existing = await _db.Payments
+                .Find(x => x.ParkingSessionId == sessionId &&
+                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null &&
+                existing.Amount == request.Amount &&
+                existing.PlateNumber == plate &&
+                string.Equals(existing.OwnerUserId, ownerUserId, StringComparison.Ordinal))
+                return Result<PaymentDto>.Ok(Map(existing));
+
+            return Result<PaymentDto>.Fail(
+                "A payment already exists for this parking session.",
+                PaymentErrorCodes.DuplicatePaymentForSession);
+        }
     }
 
     public async Task<Result<PaymentDto>> ConfirmAsync(string id, string confirmedByUserId, CancellationToken ct = default)
