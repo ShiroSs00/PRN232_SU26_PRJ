@@ -74,7 +74,9 @@ public class PaymentsController : ControllerBase
     // không enforce ownership chặt cross-service; Driver chỉ thao tác khi biết sessionId
     // (lấy từ "lượt gửi của tôi"). Đủ cho phạm vi đồ án.
     [HttpPost]
-    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
+    // Driver creation is intentionally disabled: checkout payments are created by
+    // trusted staff orchestration after the backend calculates the amount.
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]

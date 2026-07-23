@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddHttpClient<IGeminiClient, GeminiClient>();
         services.AddHttpClient<IFeeCalculationClient, FeeCalculationClient>();
         services.AddHttpClient<ISubscriptionCheckClient, SubscriptionCheckClient>();
+        services.AddHttpClient<IPaymentClient, PaymentClient>();
 
         return services;
     }

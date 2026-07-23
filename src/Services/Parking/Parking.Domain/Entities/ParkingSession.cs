@@ -41,6 +41,8 @@ public class ParkingSession : BaseEntity
 
     public string? SubscriptionId { get; set; }
 
+    public bool IsLostTicket { get; set; }
+
     public decimal TotalFee { get; set; }
 
     public string CreatedByUserId { get; set; } = string.Empty;
