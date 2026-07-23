@@ -1,5 +1,7 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using Payment.Domain.Entities;
+using Payment.Domain.Enums;
 using Shared.Common.Entities;
 
 namespace Payment.Infrastructure.Persistence;
@@ -41,6 +43,20 @@ public class MongoDbInitializer
             new CreateIndexModel<Payment.Domain.Entities.Payment>(
                 Builders<Payment.Domain.Entities.Payment>.IndexKeys.Ascending(x => x.ParkingSessionId),
                 new CreateIndexOptions { Name = "ix_payments_parking_session_id" }),
+            new CreateIndexModel<Payment.Domain.Entities.Payment>(
+                Builders<Payment.Domain.Entities.Payment>.IndexKeys.Ascending(x => x.ParkingSessionId),
+                new CreateIndexOptions<Payment.Domain.Entities.Payment>
+                {
+                    Name = "ux_payments_parking_session_id",
+                    Unique = true,
+                    PartialFilterExpression = Builders<Payment.Domain.Entities.Payment>.Filter.And(
+                        Builders<Payment.Domain.Entities.Payment>.Filter.Type(
+                            x => x.ParkingSessionId,
+                            BsonType.String),
+                        Builders<Payment.Domain.Entities.Payment>.Filter.In(
+                            x => x.Status,
+                            new[] { PaymentStatus.Pending, PaymentStatus.Paid }))
+                }),
             new CreateIndexModel<Payment.Domain.Entities.Payment>(
                 Builders<Payment.Domain.Entities.Payment>.IndexKeys.Ascending(x => x.ShiftId),
                 new CreateIndexOptions { Name = "ix_payments_shift_id" }),

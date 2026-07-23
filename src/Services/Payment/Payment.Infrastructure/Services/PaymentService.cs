@@ -12,10 +12,12 @@ namespace Payment.Infrastructure.Services;
 public class PaymentService : IPaymentService
 {
     private readonly MongoDbContext _db;
+    private readonly IShiftValidationClient _shiftValidationClient;
 
-    public PaymentService(MongoDbContext db)
+    public PaymentService(MongoDbContext db, IShiftValidationClient shiftValidationClient)
     {
         _db = db;
+        _shiftValidationClient = shiftValidationClient;
     }
 
     public async Task<Result<PagedResult<PaymentDto>>> GetListAsync(
@@ -78,52 +80,105 @@ public class PaymentService : IPaymentService
         return Result<List<PaymentDto>>.Ok(items.Select(Map).ToList());
     }
 
+    public async Task<Result<ShiftPaymentSummaryDto>> GetShiftSummaryAsync(
+        string shiftId,
+        CancellationToken ct = default)
+    {
+        var payments = await _db.Payments
+            .Find(x => x.ShiftId == shiftId &&
+                       (x.Status == PaymentStatus.Paid || x.Status == PaymentStatus.Pending))
+            .Project(x => new { x.Amount, x.Method, x.Status })
+            .ToListAsync(ct);
+
+        return Result<ShiftPaymentSummaryDto>.Ok(new ShiftPaymentSummaryDto
+        {
+            ShiftId = shiftId,
+            CashAmount = payments
+                .Where(x => x.Status == PaymentStatus.Paid && x.Method == PaymentMethod.Cash)
+                .Sum(x => x.Amount),
+            NonCashAmount = payments
+                .Where(x => x.Status == PaymentStatus.Paid && x.Method != PaymentMethod.Cash)
+                .Sum(x => x.Amount),
+            PendingPaymentCount = payments.LongCount(x => x.Status == PaymentStatus.Pending)
+        });
+    }
+
     public async Task<Result<PaymentDto>> CreateAsync(string createdByUserId, CreatePaymentRequest request, CancellationToken ct = default)
     {
-        var hasSession = !string.IsNullOrWhiteSpace(request.ParkingSessionId);
-        var hasSubscription = !string.IsNullOrWhiteSpace(request.SubscriptionId);
+        var sessionId = string.IsNullOrWhiteSpace(request.ParkingSessionId)
+            ? null
+            : request.ParkingSessionId.Trim();
+        var subscriptionId = string.IsNullOrWhiteSpace(request.SubscriptionId)
+            ? null
+            : request.SubscriptionId.Trim();
+        var ownerUserId = string.IsNullOrWhiteSpace(request.OwnerUserId)
+            ? null
+            : request.OwnerUserId.Trim();
+        var shiftId = string.IsNullOrWhiteSpace(request.ShiftId)
+            ? null
+            : request.ShiftId.Trim();
 
-        if (!hasSession && !hasSubscription)
-            return Result<PaymentDto>.Fail("ParkingSessionId or SubscriptionId is required.", PaymentErrorCodes.ValidationFailed);
+        if ((sessionId is null) == (subscriptionId is null))
+            return Result<PaymentDto>.Fail(
+                "Exactly one of ParkingSessionId or SubscriptionId is required.",
+                PaymentErrorCodes.ValidationFailed);
         if (string.IsNullOrWhiteSpace(request.PlateNumber))
             return Result<PaymentDto>.Fail("PlateNumber is required.", PaymentErrorCodes.ValidationFailed);
         if (request.Amount <= 0)
             return Result<PaymentDto>.Fail("Amount must be positive.", PaymentErrorCodes.ValidationFailed);
+        if (!Enum.IsDefined(request.Method))
+            return Result<PaymentDto>.Fail("Payment method is invalid.", PaymentErrorCodes.InvalidPaymentMethod);
+        if (request.Method == PaymentMethod.Cash && shiftId is null)
+            return Result<PaymentDto>.Fail(
+                "Cash payments require an open shift.",
+                PaymentErrorCodes.ValidationFailed);
+        if (shiftId is not null &&
+            !await IsCurrentShiftAsync(shiftId, createdByUserId, ct))
+            return Result<PaymentDto>.Fail(
+                "ShiftId must be the requesting staff member's current open shift.",
+                PaymentErrorCodes.InvalidShift);
 
-        // Disallow duplicate Pending/Paid payment for the same session or subscription.
-        if (hasSession)
+        var plate = request.PlateNumber.Trim().ToUpperInvariant();
+        Domain.Entities.Payment? existing;
+        if (sessionId is not null)
         {
-            var existing = await _db.Payments
-                .Find(x => x.ParkingSessionId == request.ParkingSessionId &&
+            existing = await _db.Payments
+                .Find(x => x.ParkingSessionId == sessionId &&
                            (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
                 .FirstOrDefaultAsync(ct);
-            if (existing is not null)
-                return Result<PaymentDto>.Fail(
-                    $"A {existing.Status} payment already exists for this session.",
-                    PaymentErrorCodes.DuplicatePaymentForSession);
+        }
+        else
+        {
+            existing = await _db.Payments
+                .Find(x => x.SubscriptionId == subscriptionId &&
+                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
+                .FirstOrDefaultAsync(ct);
         }
 
-        if (hasSubscription)
+        if (existing is not null)
         {
-            var existing = await _db.Payments
-                .Find(x => x.SubscriptionId == request.SubscriptionId &&
-                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
-                .FirstOrDefaultAsync(ct);
-            if (existing is not null)
+            if (existing.Amount != request.Amount ||
+                existing.PlateNumber != plate ||
+                existing.Method != request.Method ||
+                !string.Equals(existing.OwnerUserId, ownerUserId, StringComparison.Ordinal) ||
+                !string.Equals(existing.ShiftId, shiftId, StringComparison.Ordinal))
                 return Result<PaymentDto>.Fail(
-                    $"A {existing.Status} payment already exists for this subscription.",
+                    "An existing payment for this source has different immutable details.",
                     PaymentErrorCodes.DuplicatePaymentForSession);
+
+            return Result<PaymentDto>.Ok(Map(existing));
         }
 
         var entity = new Domain.Entities.Payment
         {
             Id = ObjectId.GenerateNewId().ToString(),
-            ParkingSessionId = hasSession ? request.ParkingSessionId!.Trim() : null,
-            SubscriptionId = hasSubscription ? request.SubscriptionId!.Trim() : null,
-            PlateNumber = request.PlateNumber.Trim().ToUpperInvariant(),
-            VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId,
-            ShiftId = string.IsNullOrWhiteSpace(request.ShiftId) ? null : request.ShiftId,
+            ParkingSessionId = sessionId,
+            SubscriptionId = subscriptionId,
+            PlateNumber = plate,
+            VehicleId = string.IsNullOrWhiteSpace(request.VehicleId) ? null : request.VehicleId.Trim(),
+            ShiftId = shiftId,
             CreatedByUserId = createdByUserId,
+            OwnerUserId = ownerUserId,
             Amount = request.Amount,
             Method = request.Method,
             Status = PaymentStatus.Pending,
@@ -131,8 +186,54 @@ public class PaymentService : IPaymentService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _db.Payments.InsertOneAsync(entity, cancellationToken: ct);
-        return Result<PaymentDto>.Ok(Map(entity));
+        try
+        {
+            await _db.Payments.InsertOneAsync(entity, cancellationToken: ct);
+            if (shiftId is not null &&
+                !await IsCurrentShiftAsync(shiftId, createdByUserId, ct))
+            {
+                await _db.Payments.UpdateOneAsync(
+                    x => x.Id == entity.Id && x.Status == PaymentStatus.Pending,
+                    Builders<Domain.Entities.Payment>.Update.Set(x => x.Status, PaymentStatus.Cancelled),
+                    cancellationToken: CancellationToken.None);
+                return Result<PaymentDto>.Fail(
+                    "The shift started closing while the payment was being created.",
+                    PaymentErrorCodes.InvalidShift);
+            }
+            return Result<PaymentDto>.Ok(Map(entity));
+        }
+        catch (MongoWriteException ex) when (
+            sessionId is not null &&
+            ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            existing = await _db.Payments
+                .Find(x => x.ParkingSessionId == sessionId &&
+                           (x.Status == PaymentStatus.Pending || x.Status == PaymentStatus.Paid))
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null &&
+                existing.Amount == request.Amount &&
+                existing.PlateNumber == plate &&
+                existing.Method == request.Method &&
+                string.Equals(existing.OwnerUserId, ownerUserId, StringComparison.Ordinal) &&
+                string.Equals(existing.ShiftId, shiftId, StringComparison.Ordinal))
+                return Result<PaymentDto>.Ok(Map(existing));
+
+            return Result<PaymentDto>.Fail(
+                "A payment already exists for this parking session.",
+                PaymentErrorCodes.DuplicatePaymentForSession);
+        }
+    }
+
+    private async Task<bool> IsCurrentShiftAsync(
+        string shiftId,
+        string staffUserId,
+        CancellationToken ct)
+    {
+        var result = await _shiftValidationClient.GetCurrentAsync(ct);
+        return result.Success &&
+               result.Value?.Status == 1 &&
+               string.Equals(result.Value.Id, shiftId, StringComparison.Ordinal) &&
+               string.Equals(result.Value.StaffUserId, staffUserId, StringComparison.Ordinal);
     }
 
     public async Task<Result<PaymentDto>> ConfirmAsync(string id, string confirmedByUserId, CancellationToken ct = default)
@@ -183,6 +284,7 @@ public class PaymentService : IPaymentService
         VehicleId = x.VehicleId,
         ShiftId = x.ShiftId,
         CreatedByUserId = x.CreatedByUserId,
+        OwnerUserId = x.OwnerUserId,
         ConfirmedByUserId = x.ConfirmedByUserId,
         TransactionCode = x.TransactionCode,
         Amount = x.Amount,

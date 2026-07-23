@@ -46,6 +46,8 @@ public class PaymentsController : ControllerBase
         var result = await _payments.GetByIdAsync(id, ct);
         if (!result.Success)
             return NotFound(ApiResponse.Fail(result.Error!));
+        if (!CanAccessPayment(result.Value!))
+            return PaymentAccessDenied();
         return Ok(ApiResponse<PaymentDto>.Ok(result.Value!));
     }
 
@@ -56,7 +58,8 @@ public class PaymentsController : ControllerBase
     public async Task<IActionResult> GetBySession(string sessionId, CancellationToken ct)
     {
         var result = await _payments.GetBySessionAsync(sessionId, ct);
-        return Ok(ApiResponse<List<PaymentDto>>.Ok(result.Value!));
+        var items = result.Value!.Where(CanAccessPayment).ToList();
+        return Ok(ApiResponse<List<PaymentDto>>.Ok(items));
     }
 
     // Driver xem payment theo vé tháng.
@@ -66,15 +69,23 @@ public class PaymentsController : ControllerBase
     public async Task<IActionResult> GetBySubscription(string subscriptionId, CancellationToken ct)
     {
         var result = await _payments.GetBySubscriptionAsync(subscriptionId, ct);
-        return Ok(ApiResponse<List<PaymentDto>>.Ok(result.Value!));
+        var items = result.Value!.Where(CanAccessPayment).ToList();
+        return Ok(ApiResponse<List<PaymentDto>>.Ok(items));
     }
 
-    // Driver có thể tạo payment cho phiên của mình.
-    // Lưu ý: Payment là service riêng, không truy được Vehicle ở Parking nên
-    // không enforce ownership chặt cross-service; Driver chỉ thao tác khi biết sessionId
-    // (lấy từ "lượt gửi của tôi"). Đủ cho phạm vi đồ án.
+    [HttpGet("by-shift/{shiftId}/summary")]
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
+    [ProducesResponseType(typeof(ApiResponse<ShiftPaymentSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetShiftSummary(string shiftId, CancellationToken ct)
+    {
+        var result = await _payments.GetShiftSummaryAsync(shiftId, ct);
+        return Ok(ApiResponse<ShiftPaymentSummaryDto>.Ok(result.Value!));
+    }
+
     [HttpPost]
-    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff,Driver")]
+    // Driver creation is intentionally disabled: checkout payments are created by
+    // trusted staff orchestration after the backend calculates the amount.
+    [Authorize(Roles = "Admin,FacilityManager,ParkingStaff")]
     [ProducesResponseType(typeof(ApiResponse<PaymentDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
@@ -91,6 +102,7 @@ public class PaymentsController : ControllerBase
             var status = result.ErrorCode switch
             {
                 PaymentErrorCodes.DuplicatePaymentForSession => StatusCodes.Status409Conflict,
+                PaymentErrorCodes.InvalidShift => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status400BadRequest
             };
             return StatusCode(status, ApiResponse.Fail(result.Error!));
@@ -139,6 +151,12 @@ public class PaymentsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreatePayOsLink(string id, CancellationToken ct)
     {
+        var paymentResult = await _payments.GetByIdAsync(id, ct);
+        if (!paymentResult.Success)
+            return NotFound(ApiResponse.Fail(paymentResult.Error!));
+        if (!CanAccessPayment(paymentResult.Value!))
+            return PaymentAccessDenied();
+
         var result = await _payos.CreatePaymentLinkAsync(id, ct);
         if (!result.Success)
         {
@@ -163,12 +181,19 @@ public class PaymentsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CheckPayOsStatus(string id, CancellationToken ct)
     {
+        var paymentResult = await _payments.GetByIdAsync(id, ct);
+        if (!paymentResult.Success)
+            return NotFound(ApiResponse.Fail(paymentResult.Error!));
+        if (!CanAccessPayment(paymentResult.Value!))
+            return PaymentAccessDenied();
+
         var result = await _payos.CheckPaymentStatusAsync(id, ct);
         if (!result.Success)
         {
             var status = result.ErrorCode switch
             {
                 PaymentErrorCodes.PaymentNotFound => StatusCodes.Status404NotFound,
+                PaymentErrorCodes.PayOsSettingsMissing => StatusCodes.Status503ServiceUnavailable,
                 PaymentErrorCodes.PayOsRequestFailed => StatusCodes.Status502BadGateway,
                 _ => StatusCodes.Status400BadRequest
             };
@@ -200,6 +225,25 @@ public class PaymentsController : ControllerBase
         };
         return StatusCode(status, ApiResponse.Fail(result.Error!));
     }
+
+    private bool CanAccessPayment(PaymentDto payment)
+    {
+        if (!IsDriverOnly())
+            return true;
+
+        var userId = GetUserId();
+        return !string.IsNullOrWhiteSpace(userId) &&
+               string.Equals(payment.OwnerUserId, userId, StringComparison.Ordinal);
+    }
+
+    private IActionResult PaymentAccessDenied() =>
+        StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Fail("You do not have access to this payment."));
+
+    private bool IsDriverOnly() =>
+        User.IsInRole("Driver") &&
+        !User.IsInRole("Admin") &&
+        !User.IsInRole("FacilityManager") &&
+        !User.IsInRole("ParkingStaff");
 
     private string? GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ??

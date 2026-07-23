@@ -17,6 +17,8 @@ public class PaymentDto
     public string? ShiftId { get; set; }
 
     public string CreatedByUserId { get; set; } = string.Empty;
+    public string? OwnerUserId { get; set; }
+
 
     public string? ConfirmedByUserId { get; set; }
 
@@ -54,12 +56,22 @@ public class CreatePaymentRequest
     public string? VehicleId { get; set; }
 
     public string? ShiftId { get; set; }
+    public string? OwnerUserId { get; set; }
+
 
     public decimal Amount { get; set; }
 
     public PaymentMethod Method { get; set; } = PaymentMethod.Cash;
 
     public string? Note { get; set; }
+}
+
+public sealed class ShiftPaymentSummaryDto
+{
+    public string ShiftId { get; set; } = string.Empty;
+    public decimal CashAmount { get; set; }
+    public decimal NonCashAmount { get; set; }
+    public long PendingPaymentCount { get; set; }
 }
 
 public class PayOsLinkResponse

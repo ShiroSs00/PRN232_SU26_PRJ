@@ -32,6 +32,21 @@ public static class ParkingErrorCodes
     public const string SessionAccessDenied = "SESSION_ACCESS_DENIED";
     public const string ZoneFull = "ZONE_FULL";
     public const string InvalidSubscription = "INVALID_SUBSCRIPTION";
+    public const string PaymentNotFound = "PAYMENT_NOT_FOUND";
+    public const string PaymentNotPaid = "PAYMENT_NOT_PAID";
+    public const string PaymentMismatch = "PAYMENT_MISMATCH";
+    public const string PaymentRequired = "PAYMENT_REQUIRED";
+    public const string PaymentServiceUnavailable = "PAYMENT_SERVICE_UNAVAILABLE";
+
+    // Shift
+    public const string ShiftNotFound = "SHIFT_NOT_FOUND";
+    public const string OpenShiftAlreadyExists = "OPEN_SHIFT_ALREADY_EXISTS";
+    public const string ShiftNotOpen = "SHIFT_NOT_OPEN";
+    public const string ShiftAccessDenied = "SHIFT_ACCESS_DENIED";
+    public const string ShiftRequired = "SHIFT_REQUIRED";
+    public const string ShiftBuildingMismatch = "SHIFT_BUILDING_MISMATCH";
+    public const string ShiftDifferenceNoteRequired = "SHIFT_DIFFERENCE_NOTE_REQUIRED";
+    public const string ShiftHasPendingPayments = "SHIFT_HAS_PENDING_PAYMENTS";
 
     // Incident
     public const string IncidentNotFound = "INCIDENT_NOT_FOUND";

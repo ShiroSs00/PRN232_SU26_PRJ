@@ -9,6 +9,7 @@ public interface IFeeCalculationClient
         string vehicleTypeId,
         DateTime checkInTime,
         DateTime checkOutTime,
+        bool penaltiesOnly,
         bool isLostTicket,
         CancellationToken ct = default);
 }

@@ -39,6 +39,7 @@ public static class DependencyInjection
 
         // Operations
         services.AddScoped<IParkingSessionService, ParkingSessionService>();
+        services.AddScoped<IShiftService, ShiftService>();
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IFeedbackService, FeedbackService>();
         services.AddScoped<IIncidentService, IncidentService>();
@@ -49,6 +50,7 @@ public static class DependencyInjection
         services.AddHttpClient<IGeminiClient, GeminiClient>();
         services.AddHttpClient<IFeeCalculationClient, FeeCalculationClient>();
         services.AddHttpClient<ISubscriptionCheckClient, SubscriptionCheckClient>();
+        services.AddHttpClient<IPaymentClient, PaymentClient>();
 
         return services;
     }

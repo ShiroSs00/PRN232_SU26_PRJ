@@ -1,4 +1,5 @@
 namespace Parking.Application.Abstractions;
+using Parking.Application.Common;
 
 public class ActiveSubscriptionDto
 {
@@ -13,5 +14,9 @@ public class ActiveSubscriptionDto
 
 public interface ISubscriptionCheckClient
 {
-    Task<ActiveSubscriptionDto?> GetActiveByPlateAsync(string plateNumber, CancellationToken ct = default);
+    Task<Result<ActiveSubscriptionDto?>> GetActiveAsync(
+        string plateNumber,
+        string buildingId,
+        string vehicleTypeId,
+        CancellationToken ct = default);
 }

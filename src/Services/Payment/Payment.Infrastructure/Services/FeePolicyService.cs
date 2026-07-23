@@ -182,72 +182,76 @@ public class FeePolicyService : IFeePolicyService
         var breakdown = new List<FeeBreakdownItem>();
         decimal amount = 0;
 
-        switch (policy.PricingType)
+        if (FeeCalculationRules.IncludeBaseCharge(request.PenaltiesOnly))
         {
-            case PricingType.PerTurn:
-                amount = policy.BasePrice;
-                breakdown.Add(new FeeBreakdownItem { Description = "Per-turn base", Amount = policy.BasePrice });
-                break;
-
-            case PricingType.Hourly:
+            switch (policy.PricingType)
             {
-                var hours = (int)Math.Ceiling(duration.TotalHours);
-                if (hours < 1) hours = 1;
-                amount = policy.BasePrice;
-                breakdown.Add(new FeeBreakdownItem { Description = "Base price", Amount = policy.BasePrice });
+                case PricingType.PerTurn:
+                    amount = policy.BasePrice;
+                    breakdown.Add(new FeeBreakdownItem { Description = "Per-turn base", Amount = policy.BasePrice });
+                    break;
 
-                var hourlyRate = policy.HourlyPrice ?? 0m;
-                if (hourlyRate > 0)
-                {
-                    var hourlyTotal = hourlyRate * hours;
-                    amount += hourlyTotal;
-                    breakdown.Add(new FeeBreakdownItem
+                case PricingType.Hourly:
                     {
-                        Description = $"Hourly ({hours}h x {hourlyRate:0.##})",
-                        Amount = hourlyTotal
-                    });
-                }
-                break;
-            }
+                        var hours = (int)Math.Ceiling(duration.TotalHours);
+                        if (hours < 1) hours = 1;
+                        amount = policy.BasePrice;
+                        breakdown.Add(new FeeBreakdownItem { Description = "Base price", Amount = policy.BasePrice });
 
-            case PricingType.Daily:
-            {
-                var days = (int)Math.Ceiling(duration.TotalDays);
-                if (days < 1) days = 1;
-                var dailyRate = policy.DailyPrice ?? policy.BasePrice;
-                var dailyTotal = dailyRate * days;
-                amount = dailyTotal;
-                breakdown.Add(new FeeBreakdownItem
-                {
-                    Description = $"Daily ({days}d x {dailyRate:0.##})",
-                    Amount = dailyTotal
-                });
-                break;
-            }
+                        var hourlyRate = policy.HourlyPrice ?? 0m;
+                        if (hourlyRate > 0)
+                        {
+                            var hourlyTotal = hourlyRate * hours;
+                            amount += hourlyTotal;
+                            breakdown.Add(new FeeBreakdownItem
+                            {
+                                Description = $"Hourly ({hours}h x {hourlyRate:0.##})",
+                                Amount = hourlyTotal
+                            });
+                        }
+                        break;
+                    }
 
-            case PricingType.Monthly:
-            {
-                amount = policy.MonthlyPrice ?? policy.BasePrice;
-                breakdown.Add(new FeeBreakdownItem { Description = "Monthly fee", Amount = amount });
-                break;
+                case PricingType.Daily:
+                    {
+                        var days = (int)Math.Ceiling(duration.TotalDays);
+                        if (days < 1) days = 1;
+                        var dailyRate = policy.DailyPrice ?? policy.BasePrice;
+                        var dailyTotal = dailyRate * days;
+                        amount = dailyTotal;
+                        breakdown.Add(new FeeBreakdownItem
+                        {
+                            Description = $"Daily ({days}d x {dailyRate:0.##})",
+                            Amount = dailyTotal
+                        });
+                        break;
+                    }
+
+                case PricingType.Monthly:
+                    {
+                        amount = policy.MonthlyPrice ?? policy.BasePrice;
+                        breakdown.Add(new FeeBreakdownItem { Description = "Monthly fee", Amount = amount });
+                        break;
+                    }
             }
         }
 
         // Phụ phí quá giờ cố định 1 lần: áp cho PerTurn và Hourly khi thời gian gửi
         // vượt ngưỡng OvertimeAfterHours (mặc định 24h nếu không cấu hình, giữ hành vi cũ).
-        if (policy.OvertimeFee > 0
-            && (policy.PricingType == PricingType.PerTurn || policy.PricingType == PricingType.Hourly))
+        var overtimeThreshold = policy.OvertimeAfterHours ?? 24;
+        if (FeeCalculationRules.ShouldApplyOvertime(
+                policy.PricingType,
+                policy.OvertimeFee,
+                policy.OvertimeAfterHours,
+                duration,
+                request.PenaltiesOnly))
         {
-            var threshold = policy.OvertimeAfterHours ?? 24;
-            if (duration.TotalHours > threshold)
+            amount += policy.OvertimeFee;
+            breakdown.Add(new FeeBreakdownItem
             {
-                amount += policy.OvertimeFee;
-                breakdown.Add(new FeeBreakdownItem
-                {
-                    Description = $"Phụ phí quá giờ (sau {threshold}h)",
-                    Amount = policy.OvertimeFee
-                });
-            }
+                Description = $"Phụ phí quá giờ (sau {overtimeThreshold}h)",
+                Amount = policy.OvertimeFee
+            });
         }
 
         if (request.IsLostTicket && policy.LostTicketFee > 0)

@@ -22,7 +22,11 @@ public interface ISubscriptionService
 
     Task<Result<SubscriptionDto>> GetByIdAsync(string id, CancellationToken ct = default);
 
-    Task<Result<SubscriptionDto?>> GetActiveByPlateAsync(string plateNumber, CancellationToken ct = default);
+    Task<Result<SubscriptionDto?>> GetActiveAsync(
+        string plateNumber,
+        string buildingId,
+        string vehicleTypeId,
+        CancellationToken ct = default);
 
     Task<Result<SubscriptionDto>> CreateAsync(CreateSubscriptionRequest request, CancellationToken ct = default);
 

@@ -167,20 +167,9 @@ public class PayOsService : IPayOsService
             return Result.Ok();
         }
 
-        // Idempotent: already paid — log and ack.
-        if (payment.Status == PaymentStatus.Paid)
-        {
-            _logger.LogInformation(
-                "PayOS webhook: payment {PaymentId} already paid (orderCode {OrderCode}); skipping",
-                payment.Id, verified.OrderCode);
-            return Result.Ok();
-        }
-
-        // Only flip to Paid when PayOS reports success (data.code == "00") and it was Pending.
         var success = string.Equals(webhook.Code, "00", StringComparison.Ordinal) ||
                       webhook.Success ||
                       string.Equals(verified.Code, "00", StringComparison.Ordinal);
-
         if (!success)
         {
             _logger.LogWarning(
@@ -189,132 +178,162 @@ public class PayOsService : IPayOsService
             return Result.Ok();
         }
 
+        await ReconcilePaidAsync(
+            payment,
+            verified.Amount,
+            verified.Reference,
+            rawPayload,
+            JsonSerializer.Serialize(verified, WebhookJsonOptions),
+            ct);
+        return Result.Ok();
+    }
+    public async Task<Result<PaymentDto>> CheckPaymentStatusAsync(string paymentId, CancellationToken ct = default)
+    {
+
+        var payment = await _db.Payments.Find(x => x.Id == paymentId).FirstOrDefaultAsync(ct);
+        if (payment is null)
+            return Result<PaymentDto>.Fail("Payment not found.", PaymentErrorCodes.PaymentNotFound);
         if (payment.Status != PaymentStatus.Pending)
+            return Result<PaymentDto>.Ok(Map(payment));
+        if (string.IsNullOrWhiteSpace(payment.PaymentLinkId) || !payment.OrderCode.HasValue)
+            return Result<PaymentDto>.Fail("No PayOS payment link associated.", PaymentErrorCodes.ValidationFailed);
+        if (!HasCredentials())
+            return Result<PaymentDto>.Fail("PayOS credentials are not configured.", PaymentErrorCodes.PayOsSettingsMissing);
+
+        try
         {
-            // Refunded / Cancelled / Failed — refuse to silently overwrite.
+            var remote = await _client.PaymentRequests.GetAsync(payment.PaymentLinkId);
+            if (remote.Id != payment.PaymentLinkId || remote.OrderCode != payment.OrderCode.Value)
+            {
+                _logger.LogError("PayOS identity mismatch for payment {PaymentId}", payment.Id);
+                return Result<PaymentDto>.Fail(
+                    "PayOS returned mismatched payment identity.",
+                    PaymentErrorCodes.PayOsRequestFailed);
+            }
+
+            if (remote.Status != PaymentLinkStatus.Paid)
+                return Result<PaymentDto>.Ok(Map(payment));
+
+            var expectedAmount = (long)Math.Round(payment.Amount, MidpointRounding.AwayFromZero);
+            if (remote.Amount != expectedAmount)
+            {
+                _logger.LogWarning(
+                    "PayOS order amount mismatch for payment {PaymentId}: expected {Expected}, remote {Remote}",
+                    payment.Id, expectedAmount, remote.Amount);
+                return Result<PaymentDto>.Ok(Map(payment));
+            }
+
+            var remoteTransaction = remote.Transactions?
+                .LastOrDefault(x => x.Amount == remote.AmountPaid) ??
+                remote.Transactions?.LastOrDefault();
+            await ReconcilePaidAsync(
+                payment,
+                remote.AmountPaid,
+                remoteTransaction?.Reference,
+                JsonSerializer.Serialize(new { payment.PaymentLinkId, payment.OrderCode }),
+                JsonSerializer.Serialize(remote, WebhookJsonOptions),
+                ct);
+
+            var current = await _db.Payments.Find(x => x.Id == paymentId).FirstOrDefaultAsync(ct);
+            return Result<PaymentDto>.Ok(Map(current ?? payment));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PayOS status check error for payment {PaymentId}", paymentId);
+            return Result<PaymentDto>.Fail(
+                $"PayOS request failed: {ex.Message}",
+                PaymentErrorCodes.PayOsRequestFailed);
+        }
+    }
+
+    private async Task<Domain.Entities.Payment> ReconcilePaidAsync(
+        Domain.Entities.Payment payment,
+        long actualAmount,
+        string? providerReference,
+        string requestPayload,
+        string responsePayload,
+        CancellationToken ct)
+    {
+        var decision = PayOsReconciliationRules.EvaluatePaid(payment.Status, payment.Amount, actualAmount);
+        if (decision == PayOsPaidReconciliationDecision.RejectAmount)
+        {
             _logger.LogWarning(
-                "PayOS webhook: payment {PaymentId} is {Status}, not Pending; ignoring success",
+                "PayOS amount mismatch for payment {PaymentId}: expected {Expected}, actual {Actual}",
+                payment.Id, payment.Amount, actualAmount);
+            return payment;
+        }
+        if (decision == PayOsPaidReconciliationDecision.RejectStatus)
+        {
+            _logger.LogWarning(
+                "PayOS paid event ignored for payment {PaymentId} in terminal status {Status}",
                 payment.Id, payment.Status);
-            return Result.Ok();
+            return payment;
         }
 
-        // Defense-in-depth: the webhook is signature-verified, but still confirm the
-        // amount paid matches the stored payment amount before flipping to Paid.
-        var expectedAmount = (long)Math.Round(payment.Amount, MidpointRounding.AwayFromZero);
-        if (verified.Amount != expectedAmount)
-        {
-            _logger.LogWarning(
-                "PayOS webhook: amount mismatch for payment {PaymentId} (expected {Expected}, got {Actual}); not flipping to Paid",
-                payment.Id, expectedAmount, verified.Amount);
-            return Result.Ok();
-        }
-
+        var transactionCode = !string.IsNullOrWhiteSpace(providerReference)
+            ? providerReference.Trim()
+            : $"{payment.PaymentLinkId ?? "payment"}-{payment.OrderCode?.ToString() ?? payment.Id}";
         var now = DateTime.UtcNow;
-        var update = Builders<Domain.Entities.Payment>.Update
-            .Set(x => x.Status, PaymentStatus.Paid)
-            .Set(x => x.PaidAt, now)
-            .Set(x => x.Method, PaymentMethod.EWallet)
-            .Set(x => x.TransactionCode, verified.Reference);
-        await _db.Payments.UpdateOneAsync(x => x.Id == payment.Id, update, cancellationToken: ct);
+        if (decision == PayOsPaidReconciliationDecision.Apply)
+        {
+            var update = Builders<Domain.Entities.Payment>.Update
+                .Set(x => x.Status, PaymentStatus.Paid)
+                .Set(x => x.PaidAt, now)
+                .Set(x => x.Method, PaymentMethod.EWallet)
+                .Set(x => x.TransactionCode, transactionCode);
+            await _db.Payments.UpdateOneAsync(
+                x => x.Id == payment.Id && x.Status == PaymentStatus.Pending,
+                update,
+                cancellationToken: ct);
+        }
+
+        var current = await _db.Payments.Find(x => x.Id == payment.Id).FirstOrDefaultAsync(ct) ?? payment;
+        if (current.Status != PaymentStatus.Paid)
+            return current;
 
         var transaction = new Domain.Entities.PaymentTransaction
         {
             Id = ObjectId.GenerateNewId().ToString(),
-            PaymentId = payment.Id,
+            PaymentId = current.Id,
             Provider = "PayOS",
-            // Reference may be empty for some webhook events — fall back to paymentLinkId+orderCode
-            // to keep the unique (provider, transactionCode) index satisfied.
-            TransactionCode = !string.IsNullOrWhiteSpace(verified.Reference)
-                ? verified.Reference!
-                : $"{verified.PaymentLinkId}-{verified.OrderCode}",
-            Amount = verified.Amount,
+            TransactionCode = transactionCode,
+            Amount = actualAmount,
             Method = PaymentMethod.EWallet,
             Status = PaymentStatus.Paid,
-            RequestPayload = rawPayload,
-            ResponsePayload = JsonSerializer.Serialize(verified, WebhookJsonOptions),
+            RequestPayload = requestPayload,
+            ResponsePayload = responsePayload,
             CreatedAt = now,
             CompletedAt = now
         };
-
         try
         {
             await _db.PaymentTransactions.InsertOneAsync(transaction, cancellationToken: ct);
         }
         catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
         {
-            // Same PayOS reference replayed — keep idempotent.
             _logger.LogInformation(
-                "PayOS webhook: duplicate transaction {Code} for payment {PaymentId}; ignoring",
-                transaction.TransactionCode, payment.Id);
+                "PayOS transaction {Code} for payment {PaymentId} was already recorded",
+                transactionCode, current.Id);
         }
 
-        return Result.Ok();
+        return current;
     }
 
-    public async Task<Result<PaymentDto>> CheckPaymentStatusAsync(string paymentId, CancellationToken ct = default)
-    {
-        var payment = await _db.Payments.Find(x => x.Id == paymentId).FirstOrDefaultAsync(ct);
-        if (payment is null)
-            return Result<PaymentDto>.Fail("Payment not found.", PaymentErrorCodes.PaymentNotFound);
-        if (payment.Status == PaymentStatus.Paid)
-            return Result<PaymentDto>.Ok(Map(payment));
-
-        if (string.IsNullOrEmpty(payment.PaymentLinkId))
-            return Result<PaymentDto>.Fail("No PayOS payment link associated.", PaymentErrorCodes.ValidationFailed);
-
-        try
-        {
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("x-client-id", _settings.ClientId);
-            http.DefaultRequestHeaders.Add("x-api-key", _settings.ApiKey);
-
-            var baseUrl = string.IsNullOrWhiteSpace(_settings.BaseUrl)
-                ? "https://api-merchant.payos.vn"
-                : _settings.BaseUrl;
-            var resp = await http.GetAsync($"{baseUrl}/v2/payment-requests/{payment.PaymentLinkId}", ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("PayOS status check failed for payment {PaymentId}: {Status} {Body}", paymentId, resp.StatusCode, body);
-                return Result<PaymentDto>.Fail($"PayOS API returned {resp.StatusCode}.", PaymentErrorCodes.PayOsRequestFailed);
-            }
-
-            using var doc = JsonDocument.Parse(body);
-            var data = doc.RootElement.GetProperty("data");
-            var status = data.GetProperty("status").GetString();
-
-            if (string.Equals(status, "PAID", StringComparison.OrdinalIgnoreCase))
-            {
-                var now = DateTime.UtcNow;
-                var update = Builders<Domain.Entities.Payment>.Update
-                    .Set(x => x.Status, PaymentStatus.Paid)
-                    .Set(x => x.PaidAt, now)
-                    .Set(x => x.Method, PaymentMethod.EWallet);
-                await _db.Payments.UpdateOneAsync(x => x.Id == paymentId, update, cancellationToken: ct);
-
-                var updated = await _db.Payments.Find(x => x.Id == paymentId).FirstOrDefaultAsync(ct);
-                return Result<PaymentDto>.Ok(Map(updated!));
-            }
-
-            return Result<PaymentDto>.Ok(Map(payment));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PayOS status check error for payment {PaymentId}", paymentId);
-            return Result<PaymentDto>.Fail($"PayOS request failed: {ex.Message}", PaymentErrorCodes.PayOsRequestFailed);
-        }
-    }
-
+    private bool HasCredentials() =>
+        !string.IsNullOrWhiteSpace(_settings.ClientId) &&
+        !string.IsNullOrWhiteSpace(_settings.ApiKey) &&
+        !string.IsNullOrWhiteSpace(_settings.ChecksumKey);
     private static PaymentDto Map(Domain.Entities.Payment x) => new()
     {
         Id = x.Id,
         ParkingSessionId = x.ParkingSessionId,
         SubscriptionId = x.SubscriptionId,
+
         PlateNumber = x.PlateNumber,
         VehicleId = x.VehicleId,
         ShiftId = x.ShiftId,
         CreatedByUserId = x.CreatedByUserId,
+        OwnerUserId = x.OwnerUserId,
         ConfirmedByUserId = x.ConfirmedByUserId,
         TransactionCode = x.TransactionCode,
         Amount = x.Amount,

@@ -106,6 +106,9 @@ public class CalculateFeeRequest
     public DateTime CheckOutTime { get; set; }
 
     public bool IsLostTicket { get; set; }
+
+    /// <summary>When true, excludes normal base/hourly/daily/monthly charges and returns only overtime/lost-ticket penalties.</summary>
+    public bool PenaltiesOnly { get; set; }
 }
 
 public class FeeBreakdownItem

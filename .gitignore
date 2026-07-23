@@ -45,6 +45,7 @@ ScaffoldingReadMe.txt
 CodeCoverage/
 .vs/
 *.csproj.user
+appsettings.json
 appsettings.Local.json
 .verify-build/
 
